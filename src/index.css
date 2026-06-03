@@ -1,0 +1,526 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  
+  /* Modern dynamic theme bindings */
+  --color-white: var(--white-val);
+  --color-zinc-50: var(--zinc-50);
+  --color-zinc-100: var(--zinc-100);
+  --color-zinc-200: var(--zinc-200);
+  --color-zinc-300: var(--zinc-300);
+  --color-zinc-400: var(--zinc-400);
+  --color-zinc-500: var(--zinc-500);
+  --color-zinc-600: var(--zinc-600);
+  --color-zinc-700: var(--zinc-700);
+  --color-zinc-800: var(--zinc-800);
+  --color-zinc-850: var(--zinc-850);
+  --color-zinc-900: var(--zinc-900);
+  --color-zinc-950: var(--zinc-950);
+}
+
+:root {
+  /* DARK THEME (DEFAULT) */
+  --zinc-50: #fafafa;
+  --zinc-100: #f4f4f5;
+  --zinc-200: #e4e4e7;
+  --zinc-300: #d4d4d8;
+  --zinc-400: #a1a1aa;
+  --zinc-500: #71717a;
+  --zinc-600: #52525b;
+  --zinc-700: #3f3f46;
+  --zinc-800: #27272a;
+  --zinc-850: #1d1d21;
+  --zinc-900: #141416;
+  --zinc-950: #09090b;
+  --white-val: #ffffff;
+  --bg-app: #050505;
+}
+
+/* Base body transition */
+body {
+  transition: background-color 0.25s ease, color 0.25s ease;
+}
+
+/* Custom scrollbar matching dark-first technical aesthetic */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--zinc-900);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--zinc-700);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--zinc-500);
+}
+
+/* ==========================================================================
+   STUNNING LIGHT THEME CASCADE OVERRIDES (MODO CLARO)
+   ========================================================================== */
+
+.light-theme {
+  background-color: #f4f6f8 !important;
+  color: #1e293b !important;
+
+  /* LIGHT THEME VARIABLES */
+  --zinc-50: #0f172a; /* Title Headings */
+  --zinc-100: #1e293b; /* Bold content text */
+  --zinc-200: #334155; /* Normal standard text */
+  --zinc-300: #475569; /* Body copy text */
+  --zinc-400: #596a80; /* Subtle text / titles info */
+  --zinc-500: #64748b; /* Placeholders & inactive states */
+  --zinc-600: #94a3b8; /* Borders secondary */
+  --zinc-700: #cbd5e1; /* Main list divider lines */
+  --zinc-850: #f1f5f9; /* Row structures */
+  --zinc-900: #f8fafc; /* Alternating items backgrounds */
+  --zinc-950: #ffffff; /* Clean immaculate card & modal canvas */
+  --white-val: #0f172a; /* text-white changes to solid charcoal slate */
+  --bg-app: #f4f6f8;
+}
+
+/* Scrollbar in light theme */
+.light-theme ::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+.light-theme ::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+}
+.light-theme ::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Base text color guarantees in light theme to eliminate invisible white texts */
+.light-theme,
+.light-theme .text-white,
+.light-theme h1,
+.light-theme h2,
+.light-theme h3,
+.light-theme h4,
+.light-theme h5,
+.light-theme .text-zinc-100, 
+.light-theme .text-zinc-50 {
+  color: #0f172a !important; /* Extremely high contrast robust solid charcoal */
+}
+
+.light-theme .text-zinc-200,
+.light-theme .text-zinc-300 {
+  color: #1e293b !important; /* High contrast body slate */
+}
+
+.light-theme .text-zinc-400,
+.light-theme .text-zinc-500 {
+  color: #475569 !important; /* Highly visible slate icon/labels */
+}
+
+/* Text status color high contrasts in light-theme (WCAG Accessible) */
+.light-theme .text-cyan-405,
+.light-theme .text-cyan-400,
+.light-theme .text-cyan-305,
+.light-theme .text-cyan-300 {
+  color: #0369a1 !important; /* Ocean blue contrast instead of neon cyan */
+}
+.light-theme .text-lime-455,
+.light-theme .text-lime-400,
+.light-theme .text-lime-300 {
+  color: #15803d !important; /* Deep grass green contrast instead of neon lime */
+}
+.light-theme .text-amber-455,
+.light-theme .text-amber-400,
+.light-theme .text-amber-300 {
+  color: #b45309 !important; /* Dark golden brown gold instead of bright amber */
+}
+.light-theme .text-purple-455,
+.light-theme .text-purple-400,
+.light-theme .text-purple-300 {
+  color: #6d28d9 !important; /* Vivid deep royal purple */
+}
+.light-theme .text-red-400,
+.light-theme .text-red-300 {
+  color: #b91c1c !important; /* High contrast hazard crimson */
+}
+
+/* Generic background overlays overrides to transform dark containers into bright, brilliant cards */
+.light-theme .bg-zinc-950,
+.light-theme .bg-zinc-950\/95,
+.light-theme .bg-zinc-950\/90,
+.light-theme .bg-zinc-950\/85,
+.light-theme .bg-zinc-950\/80,
+.light-theme .bg-zinc-950\/70,
+.light-theme .bg-zinc-950\/60,
+.light-theme .bg-zinc-900,
+.light-theme .bg-zinc-900\/80,
+.light-theme .bg-zinc-900\/60,
+.light-theme .bg-zinc-900\/55,
+.light-theme .bg-zinc-900\/50,
+.light-theme .bg-zinc-900\/40,
+.light-theme .bg-[#050505],
+.light-theme .bg-[#060608] {
+  background-color: #ffffff !important;
+  color: #1e293b !important;
+  border-color: #cbd5e1 !important;
+}
+
+/* Card hover animation backgrounds */
+.light-theme .hover\:bg-zinc-900\/40:hover,
+.light-theme .hover\:bg-zinc-900\/20:hover {
+  background-color: #f8fafc !important;
+  border-color: #b4c6e7 !important;
+}
+
+/* Column background and border tint mappings for Kanban columns */
+.light-theme .bg-red-950\/15 {
+  background-color: #fff1f2 !important; /* Soft blushing crimson slate container */
+  border-color: #fecaca !important;
+}
+.light-theme .bg-amber-950\/10 {
+  background-color: #fffbeb !important; /* Soft sunflower amber container */
+  border-color: #fef3c7 !important;
+}
+.light-theme .bg-purple-950\/10 {
+  background-color: #faf5ff !important; /* Soft lavender violet container */
+  border-color: #e9d5ff !important;
+}
+.light-theme .bg-zinc-950\/40 {
+  background-color: #f8fafc !important; /* Pristine white-gray pending column status */
+  border-color: #e2e8f0 !important;
+}
+.light-theme .bg-lime-950\/10 {
+  background-color: #f0fdf4 !important; /* Soft forest moss green completed container */
+  border-color: #dcfce7 !important;
+}
+
+.light-theme .border-red-900\/45 { border-color: #fecaca !important; }
+.light-theme .border-amber-900\/40 { border-color: #fef3c7 !important; }
+.light-theme .border-purple-900\/40 { border-color: #e9d5ff !important; }
+.light-theme .border-lime-900\/40 { border-color: #dcfce7 !important; }
+.light-theme .border-zinc-800 { border-color: #cbd5e1 !important; }
+
+/* Timeline scheduling block overrides inside Gantt view matrix */
+.light-theme .bg-red-950\/45,
+.light-theme .bg-red-950\/40 {
+  background-color: #fee2e2 !important;
+  border-color: #fca5a5 !important;
+}
+.light-theme .bg-amber-950\/45,
+.light-theme .bg-amber-950\/40,
+.light-theme .bg-amber-950\/30 {
+  background-color: #fef3c7 !important;
+  border-color: #fcd34d !important;
+}
+.light-theme .bg-cyan-950\/40 {
+  background-color: #e0f2fe !important;
+  border-color: #bae6fd !important;
+}
+.light-theme .border-zinc-900\/30 {
+  border-color: #cbd5e1 !important;
+}
+.light-theme .bg-zinc-900\/10 {
+  background-color: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+}
+.light-theme .bg-zinc-900\/10:hover {
+  background-color: #cbd5e1 !important;
+}
+
+/* Vacation cells status styling details mapping for Vacation Matrix */
+.light-theme .bg-teal-950\/60.border-teal-500\/40.text-teal-400 {
+  background-color: #ccfbf1 !important;
+  border-color: #14b8a6 !important;
+  color: #0f766e !important;
+}
+.light-theme .bg-amber-950\/40.border-amber-600\/30.text-amber-500 {
+  background-color: #fef3c7 !important;
+  border-color: #fbbf24 !important;
+  color: #b45309 !important;
+}
+.light-theme .bg-zinc-900\/10.border-zinc-900\/40 {
+  background-color: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+}
+.light-theme .bg-zinc-900\/10.border-zinc-900\/40:hover {
+  background-color: #cbd5e1 !important;
+}
+
+/* Task details tooltip boxes hover cards */
+.light-theme .group .absolute.bg-zinc-950 {
+  background-color: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* BadgePriority pill components override */
+.light-theme .bg-zinc-900.border-zinc-700\/50.text-zinc-400 {
+  background-color: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+  color: #475569 !important;
+}
+.light-theme .bg-blue-950\/40.border-blue-800\/30.text-blue-300 {
+  background-color: #eff6ff !important;
+  border-color: #bfdbfe !important;
+  color: #1d4ed8 !important;
+}
+.light-theme .bg-orange-950\/40.border-orange-850\/30.text-orange-300 {
+  background-color: #fff7ed !important;
+  border-color: #fed7aa !important;
+  color: #c2410c !important;
+}
+.light-theme .bg-red-950\/50.border-red-800\/40.text-red-200 {
+  background-color: #fef2f2 !important;
+  border-color: #fecaca !important;
+  color: #b91c1c !important;
+}
+
+/* Count bubble indicator for columns list */
+.light-theme .bg-zinc-900.border-zinc-800.text-zinc-400 {
+  background-color: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+  color: #334155 !important;
+}
+
+/* User Bubble in the header & DB Sync light cards */
+.light-theme header,
+.light-theme header .bg-zinc-900\/40,
+.light-theme header .bg-zinc-900\/60,
+.light-theme header .bg-zinc-900 {
+  background-color: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  color: #1e293b !important;
+}
+.light-theme header button:hover {
+  background-color: #f1f5f9 !important;
+}
+.light-theme header .text-zinc-500 {
+  color: #64748b !important;
+}
+
+/* Tabs visual elements styling alignment */
+.light-theme [id^="tab-"] {
+  background-color: transparent !important;
+  color: #475569 !important;
+  border-bottom-color: transparent !important;
+}
+.light-theme [id="tab-kanban"].border-cyan-500 {
+  background-color: #ffffff !important;
+  border-bottom-color: #06b6d4 !important;
+  color: #0369a1 !important;
+  border-width: 0 0 2px 0 !important;
+}
+.light-theme [id="tab-timeline"].border-lime-500 {
+  background-color: #ffffff !important;
+  border-bottom-color: #84cc16 !important;
+  color: #15803d !important;
+  border-width: 0 0 2px 0 !important;
+}
+.light-theme [id="tab-vacations"].border-amber-500 {
+  background-color: #ffffff !important;
+  border-bottom-color: #f59e0b !important;
+  color: #b45309 !important;
+  border-width: 0 0 2px 0 !important;
+}
+.light-theme [id="tab-control"].border-purple-500 {
+  background-color: #ffffff !important;
+  border-bottom-color: #a855f7 !important;
+  color: #6d28d9 !important;
+  border-width: 0 0 2px 0 !important;
+}
+
+/* View selection toggles inside Admin Control panel */
+.light-theme .bg-zinc-900\/80.border-cyan-500\/40.text-cyan-300 {
+  background-color: #ecfeff !important;
+  border-color: #06b6d4 !important;
+  color: #0891b2 !important;
+}
+.light-theme .bg-zinc-950\/40.border-zinc-900.text-zinc-500 {
+  background-color: #f8fafc !important;
+  border-color: #e2e8f0 !important;
+  color: #64748b !important;
+}
+.light-theme .bg-zinc-950\/40.border-zinc-900.text-zinc-500:hover {
+  border-color: #cbd5e1 !important;
+  color: #334155 !important;
+}
+
+/* Tag values in administrator editor panel */
+.light-theme .inline-flex.bg-zinc-900.border-zinc-800.text-zinc-300 {
+  background-color: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+  color: #334155 !important;
+}
+.light-theme .inline-flex.bg-zinc-900.border-zinc-800.text-zinc-300:hover {
+  border-color: #ef4444 !important;
+}
+
+/* Subtask checking and marking checkboxes inside task card */
+.light-theme .border-zinc-700.text-transparent {
+  border-color: #94a3b8 !important;
+  background-color: #ffffff !important;
+}
+.light-theme .border-zinc-700.text-transparent:hover {
+  border-color: #06b6d4 !important;
+}
+
+/* Fallback controls inputs, options and dropdown panels values typed text keys */
+.light-theme input,
+.light-theme select,
+.light-theme textarea {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+.light-theme input:focus,
+.light-theme select:focus,
+.light-theme textarea:focus {
+  border-color: #0ea5e9 !important;
+  box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.15) !important;
+}
+.light-theme input::placeholder {
+  color: #94a3b8 !important;
+}
+.light-theme option {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+}
+
+/* Action button content texts standard contrast */
+.light-theme .bg-purple-600,
+.light-theme .bg-purple-500,
+.light-theme .bg-emerald-600,
+.light-theme .bg-emerald-500,
+.light-theme .bg-red-600,
+.light-theme .bg-lime-600,
+.light-theme .bg-teal-500 {
+  color: #ffffff !important;
+}
+.light-theme .bg-cyan-500,
+.light-theme .bg-cyan-600,
+.light-theme .bg-lime-500,
+.light-theme .from-lime-500,
+.light-theme .hover\:from-cyan-400:hover,
+.light-theme .from-cyan-500 {
+  color: #0f172a !important; /* Keep cyan & lime buttons dark-texted for crisp accessibility shadow contrast */
+}
+.light-theme .text-zinc-600 {
+  color: #64748b !important;
+}
+
+/* Custom overlay background backdrop blur for light cards overlay */
+.light-theme .bg-black\/80,
+.light-theme .bg-black\/60 {
+  background-color: rgba(15, 23, 42, 0.4) !important;
+}
+
+/* Solid background overlay adjustments */
+.light-theme .bg-zinc-950\/60,
+.light-theme .bg-zinc-950\/80 {
+  background-color: #ffffff !important;
+  border-color: #cbd5e1 !important;
+}
+
+/* Custom Status Select and Options with dynamic color coding */
+select.status-select-colored-urgent {
+  background-color: rgba(69, 10, 10, 0.4) !important;
+  color: #fecaca !important;
+  border-color: #991b1b !important;
+}
+.status-option-colored-urgent {
+  background-color: #1c0505 !important;
+  color: #fecaca !important;
+}
+
+select.status-select-colored-in-progress {
+  background-color: rgba(69, 26, 3, 0.4) !important;
+  color: #fef3c7 !important;
+  border-color: #92400e !important;
+}
+.status-option-colored-in-progress {
+  background-color: #1b0b02 !important;
+  color: #fef3c7 !important;
+}
+
+select.status-select-colored-review {
+  background-color: rgba(59, 7, 100, 0.4) !important;
+  color: #f3e8ff !important;
+  border-color: #6b21a8 !important;
+}
+.status-option-colored-review {
+  background-color: #140224 !important;
+  color: #f3e8ff !important;
+}
+
+select.status-select-colored-pending {
+  background-color: #18181b !important;
+  color: #e2e8f0 !important;
+  border-color: #27272a !important;
+}
+.status-option-colored-pending {
+  background-color: #18181b !important;
+  color: #e2e8f0 !important;
+}
+
+select.status-select-colored-done {
+  background-color: rgba(26, 46, 5, 0.4) !important;
+  color: #bef264 !important;
+  border-color: #3f6212 !important;
+}
+.status-option-colored-done {
+  background-color: #0d1702 !important;
+  color: #bef264 !important;
+}
+
+/* Light theme overrides */
+.light-theme select.status-select-colored-urgent {
+  background-color: #fff1f2 !important;
+  color: #b91c1c !important;
+  border-color: #fca5a5 !important;
+}
+.light-theme .status-option-colored-urgent {
+  background-color: #fff1f2 !important;
+  color: #b91c1c !important;
+}
+
+.light-theme select.status-select-colored-in-progress {
+  background-color: #fffbeb !important;
+  color: #b45309 !important;
+  border-color: #fcd34d !important;
+}
+.light-theme .status-option-colored-in-progress {
+  background-color: #fffbeb !important;
+  color: #b45309 !important;
+}
+
+.light-theme select.status-select-colored-review {
+  background-color: #faf5ff !important;
+  color: #6d28d9 !important;
+  border-color: #e9d5ff !important;
+}
+.light-theme .status-option-colored-review {
+  background-color: #faf5ff !important;
+  color: #6d28d9 !important;
+}
+
+.light-theme select.status-select-colored-pending {
+  background-color: #f8fafc !important;
+  color: #475569 !important;
+  border-color: #cbd5e1 !important;
+}
+.light-theme .status-option-colored-pending {
+  background-color: #f8fafc !important;
+  color: #475569 !important;
+}
+
+.light-theme select.status-select-colored-done {
+  background-color: #f0fdf4 !important;
+  color: #15803d !important;
+  border-color: #bef264 !important;
+}
+.light-theme .status-option-colored-done {
+  background-color: #f0fdf4 !important;
+  color: #15803d !important;
+}
+
