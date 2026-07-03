@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase/app";
-import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, type User } from "firebase/auth";
+import { getAuth, signInWithPopup, signInWithEmailAndPassword, GoogleAuthProvider, onAuthStateChanged, signOut, type User } from "firebase/auth";
 import { getFirestore, collection, getDocs } from "firebase/firestore";
 import firebaseConfig from "../../firebase-applet-config.json";
 
@@ -54,4 +54,14 @@ export const googleSignIn = async (): Promise<User | null> => {
 
 export const logout = async () => {
   await signOut(auth);
+};
+
+export const emailSignIn = async (email: string, password: string): Promise<User | null> => {
+  try {
+    const result = await signInWithEmailAndPassword(auth, email, password);
+    return result.user;
+  } catch (error: any) {
+    console.error("Error al iniciar sesión con email:", error);
+    throw error;
+  }
 };

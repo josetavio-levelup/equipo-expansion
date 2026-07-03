@@ -6,7 +6,7 @@ import VacationMatrix from "./components/VacationMatrix";
 import ControlPanel from "./components/ControlPanel";
 import LoginScreen from "./components/LoginScreen";
 import { Database, Calendar, ClipboardList, ShieldAlert, Sliders, Menu, X, Sun, Moon } from "lucide-react";
-import { initAuth, googleSignIn, logout, checkEmailAuthorized } from "./lib/firebase";
+import { initAuth, googleSignIn, emailSignIn, logout, checkEmailAuthorized } from "./lib/firebase";
 import {
   seedDefaultData,
   subscribeToAll,
@@ -155,6 +155,33 @@ export default function App() {
     } catch (err: any) {
       console.error(err);
       if (err?.code !== "auth/popup-closed-by-user") {
+        setAccessDeniedMessage(`Error al iniciar sesión: ${err?.message || err}`);
+      }
+    } finally {
+      setIsSigningIn(false);
+    }
+  };
+
+  // Login with email and password
+  const handleEmailSignIn = async (email: string, password: string) => {
+    setIsSigningIn(true);
+    setAccessDeniedMessage(null);
+    try {
+      const user = await emailSignIn(email, password);
+      // The initAuth listener will validate the email and handle the rest
+      if (!user?.email) {
+        setAccessDeniedMessage("No se pudo obtener el email de la cuenta.");
+      }
+    } catch (err: any) {
+      console.error(err);
+      const code = err?.code || "";
+      if (code === "auth/user-not-found" || code === "auth/invalid-credential") {
+        setAccessDeniedMessage("Correo o contraseña incorrectos.");
+      } else if (code === "auth/wrong-password") {
+        setAccessDeniedMessage("Contraseña incorrecta.");
+      } else if (code === "auth/too-many-requests") {
+        setAccessDeniedMessage("Demasiados intentos fallidos. Intenta de nuevo más tarde.");
+      } else {
         setAccessDeniedMessage(`Error al iniciar sesión: ${err?.message || err}`);
       }
     } finally {
@@ -354,6 +381,7 @@ export default function App() {
     return (
       <LoginScreen
         onSignIn={handleSignIn}
+        onEmailSignIn={handleEmailSignIn}
         isSigningIn={isSigningIn}
         accessDeniedMessage={accessDeniedMessage}
         isDarkMode={isDarkMode}
