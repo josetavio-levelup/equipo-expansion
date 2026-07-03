@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <!-- Circle background (dark) with a vibrant brand green/lime border -->
+  <circle cx="100" cy="100" r="90" fill="#09090b" stroke="#A3FF00" stroke-width="10" />
+  
+  <!-- Centered white logo, scaled horizontally to be narrower -->
+  <g transform="translate(20, 50) scale(0.8, 1)">
+    <!-- U letter -->
+    <polygon fill="#ffffff" points="
+      10,10
+      38,10
+      38,72
+      46,82
+      66,82
+      74,72
+      74,10
+      102,10
+      102,78
+      86,100
+      26,100
+      10,78
+    "/>
+
+    <!-- P letter -->
+    <polygon fill="#ffffff" points="
+      112,10
+      178,10
+      196,28
+      196,52
+      178,70
+      148,70
+      148,100
+      112,100
+    "/>
+    
+    <!-- P inner cutout (drawn with background color #09090b to create the hole) -->
+    <polygon fill="#09090b" points="
+      142,28
+      170,28
+      178,36
+      178,46
+      170,54
+      142,54
+    "/>
+    
+    <!-- P arrow cutout (drawn with background color #09090b to create the hole) -->
+    <polygon fill="#09090b" points="
+      130,36
+      146,54
+      130,54
+    "/>
+  </g>
+</svg>

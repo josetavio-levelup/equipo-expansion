@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { type Task, type Vacation, type TeamMember, type RouteCity, type Role, type TagType } from "./types";
+import { type Task, type Vacation, type TeamMember, type RouteCity, type Role, type TagType, type Holiday } from "./types";
 import KanbanBoard from "./components/KanbanBoard";
 import GanttTimeline from "./components/GanttTimeline";
 import VacationMatrix from "./components/VacationMatrix";
@@ -13,9 +13,10 @@ import {
   checkVacationConflict,
   addTask, updateTask, deleteTask,
   addVacation, updateVacation, deleteVacation,
-  addTeamMember, deleteTeamMember,
+  addTeamMember, updateTeamMember, deleteTeamMember,
   addRouteCity, deleteRouteCity,
   addTag, deleteTag,
+  addHoliday, deleteHoliday,
 } from "./lib/firestoreDb";
 
 export default function App() {
@@ -36,6 +37,7 @@ export default function App() {
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [routeCities, setRouteCities] = useState<RouteCity[]>([]);
   const [tagsBank, setTagsBank] = useState<TagType[]>([]);
+  const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [currentUserMemberId, setCurrentUserMemberId] = useState<string>("e_pablo");
 
   // System states
@@ -76,6 +78,7 @@ export default function App() {
         onTeamMembers: setTeamMembers,
         onRouteCities: setRouteCities,
         onTagsBank: setTagsBank,
+        onHolidays: setHolidays,
       });
       unsubscribeFirestoreRef.current = unsub;
       setServerStatus("connected");
@@ -174,11 +177,7 @@ export default function App() {
         id: uuiv4,
       };
 
-      // Conflict validation (always runs)
-      const conflict = checkVacationConflict(payload.assignedPair, payload.dueDate, vacations, teamMembers);
-      if (conflict.hasConflict) {
-        return { success: false, message: conflict.message };
-      }
+      // Conflict validation bypassed per user request
 
       await addTask(payload);
       return { success: true };
@@ -189,8 +188,7 @@ export default function App() {
 
   const handleUpdateTask = async (updatedTask: Task): Promise<{ success: boolean; message?: string }> => {
     try {
-      const conflict = checkVacationConflict(updatedTask.assignedPair, updatedTask.dueDate, vacations, teamMembers);
-      if (conflict.hasConflict) return { success: false, message: conflict.message };
+      // Conflict validation bypassed per user request
       await updateTask(updatedTask);
       return { success: true };
     } catch (err: any) {
@@ -263,6 +261,22 @@ export default function App() {
     }
   };
 
+  const handleUpdateTeamMember = async (member: { id: string; name: string; role: Role; email?: string; allowedViews?: string[] }) => {
+    try {
+      const updatedMember: TeamMember = {
+        id: member.id,
+        name: member.name,
+        role: member.role,
+        email: member.email,
+        allowedViews: member.allowedViews || [],
+      };
+      await updateTeamMember(updatedMember);
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, message: "Error al actualizar miembro: " + (err.message || err) };
+    }
+  };
+
   // --- Route Cities handlers (Firestore) ---
   const handleAddRouteCity = async (city: { id: string; name: string; region: string }) => {
     try {
@@ -282,6 +296,26 @@ export default function App() {
       return { success: true };
     } catch (err: any) {
       return { success: false, message: "Error al eliminar ciudad: " + (err.message || err) };
+    }
+  };
+
+  // --- Holidays handlers (Firestore) ---
+  const handleAddHoliday = async (holiday: { date: string; name: string }) => {
+    try {
+      const newHoliday: Holiday = { ...holiday, id: crypto.randomUUID() };
+      await addHoliday(newHoliday);
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, message: "Error al añadir festivo: " + (err.message || err) };
+    }
+  };
+
+  const handleDeleteHoliday = async (id: string) => {
+    try {
+      await deleteHoliday(id);
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, message: "Error al eliminar festivo: " + (err.message || err) };
     }
   };
 
@@ -495,21 +529,35 @@ export default function App() {
           />
           
           {/* Slider Drawer panel */}
-          <div className="relative flex-1 flex flex-col max-w-[280px] w-full bg-zinc-950 border-r border-zinc-900 p-6 space-y-6 shadow-2xl z-50">
+          <div className={`relative flex-1 flex flex-col max-w-[280px] w-full p-6 space-y-6 shadow-2xl z-50 transition-colors duration-250 ${
+            isDarkMode 
+              ? "bg-zinc-950 border-r border-zinc-900 text-zinc-100" 
+              : "bg-white border-r border-zinc-200 text-zinc-800 shadow-xl"
+          }`}>
             <div className="flex items-center justify-between">
-              <span className="text-xs font-mono font-bold tracking-widest text-zinc-400 uppercase">
+              <span className={`text-xs font-mono font-bold tracking-widest uppercase ${
+                isDarkMode ? "text-zinc-500" : "text-zinc-400"
+              }`}>
                 Menú Navegación
               </span>
               <button 
                 onClick={() => setMobileMenuOpen(false)}
-                className="p-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-300 hover:bg-zinc-800 cursor-pointer"
+                className={`p-1.5 rounded-lg border transition cursor-pointer ${
+                  isDarkMode 
+                    ? "bg-zinc-900 border-zinc-800 text-zinc-300 hover:bg-zinc-800" 
+                    : "bg-slate-50 border-zinc-200 text-zinc-600 hover:bg-slate-100"
+                }`}
               >
                 <X size={16} />
               </button>
             </div>
             
-            <div className="flex items-center gap-3 py-2 border-b border-zinc-800">
-              <div className="w-8 h-8 rounded-lg bg-zinc-900 border border-zinc-800 p-1 flex items-center justify-center overflow-hidden">
+            <div className={`flex items-center gap-3 py-2 border-b ${
+              isDarkMode ? "border-zinc-800" : "border-zinc-200"
+            }`}>
+              <div className={`w-8 h-8 rounded-lg border p-1 flex items-center justify-center overflow-hidden ${
+                isDarkMode ? "bg-zinc-900 border-zinc-800" : "bg-slate-50 border-zinc-200"
+              }`}>
                 <img 
                   src="https://lh3.googleusercontent.com/d/1BDBW61vtpPFGTorfqm4d861to0GH7Sfa" 
                   alt="Logo"
@@ -517,7 +565,9 @@ export default function App() {
                   referrerPolicy="no-referrer"
                 />
               </div>
-              <span className="text-xs font-black font-mono tracking-wider text-white">
+              <span className={`text-xs font-black font-mono tracking-wider ${
+                isDarkMode ? "text-white" : "text-zinc-900"
+              }`}>
                 EQUIPO EXPANSIÓN
               </span>
             </div>
@@ -527,8 +577,12 @@ export default function App() {
                 onClick={() => { setActiveTab("kanban"); setMobileMenuOpen(false); }}
                 className={`flex items-center gap-3 px-4 py-3 rounded-lg font-bold tracking-wider uppercase transition border text-left ${
                   activeTab === "kanban"
-                    ? "border-cyan-500 bg-cyan-950/20 text-cyan-455"
-                    : "border-transparent text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/50"
+                    ? isDarkMode 
+                      ? "border-cyan-500 bg-cyan-950/20 text-cyan-400" 
+                      : "border-cyan-500 bg-cyan-50 text-cyan-700 font-bold"
+                    : isDarkMode 
+                      ? "border-transparent text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/50" 
+                      : "border-transparent text-zinc-500 hover:text-zinc-800 hover:bg-slate-50"
                 } cursor-pointer`}
               >
                 <ClipboardList size={15} />
@@ -539,8 +593,12 @@ export default function App() {
                 onClick={() => { setActiveTab("timeline"); setMobileMenuOpen(false); }}
                 className={`flex items-center gap-3 px-4 py-3 rounded-lg font-bold tracking-wider uppercase transition border text-left ${
                   activeTab === "timeline"
-                    ? "border-lime-500 bg-lime-950/20 text-lime-455"
-                    : "border-transparent text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/50"
+                    ? isDarkMode 
+                      ? "border-lime-500 bg-lime-950/20 text-lime-400" 
+                      : "border-lime-500 bg-lime-50 text-lime-700 font-bold"
+                    : isDarkMode 
+                      ? "border-transparent text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/50" 
+                      : "border-transparent text-zinc-500 hover:text-zinc-800 hover:bg-slate-50"
                 } cursor-pointer`}
               >
                 <Calendar size={15} />
@@ -551,8 +609,12 @@ export default function App() {
                 onClick={() => { setActiveTab("vacations"); setMobileMenuOpen(false); }}
                 className={`flex items-center gap-3 px-4 py-3 rounded-lg font-bold tracking-wider uppercase transition border text-left ${
                   activeTab === "vacations"
-                    ? "border-amber-500 bg-amber-950/20 text-amber-455"
-                    : "border-transparent text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/50"
+                    ? isDarkMode 
+                      ? "border-amber-500 bg-amber-950/20 text-amber-400" 
+                      : "border-amber-500 bg-amber-50 text-amber-700 font-bold"
+                    : isDarkMode 
+                      ? "border-transparent text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/50" 
+                      : "border-transparent text-zinc-500 hover:text-zinc-800 hover:bg-slate-50"
                 } cursor-pointer`}
               >
                 <Database size={15} />
@@ -563,8 +625,12 @@ export default function App() {
                 onClick={() => { setActiveTab("control"); setMobileMenuOpen(false); }}
                 className={`flex items-center gap-3 px-4 py-3 rounded-lg font-bold tracking-wider uppercase transition border text-left ${
                   activeTab === "control"
-                    ? "border-purple-500 bg-purple-950/20 text-purple-455"
-                    : "border-transparent text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/50"
+                    ? isDarkMode 
+                      ? "border-purple-500 bg-purple-950/20 text-purple-400" 
+                      : "border-purple-500 bg-purple-50 text-purple-700 font-bold"
+                    : isDarkMode 
+                      ? "border-transparent text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/50" 
+                      : "border-transparent text-zinc-500 hover:text-zinc-800 hover:bg-slate-50"
                 } cursor-pointer`}
               >
                 <Sliders size={15} />
@@ -572,9 +638,13 @@ export default function App() {
               </button>
             </nav>
 
-            <div className="pt-4 border-t border-zinc-900 text-[10px] text-zinc-500 font-mono">
+            <div className={`pt-4 border-t text-[10px] font-mono ${
+              isDarkMode ? "border-zinc-900 text-zinc-500" : "border-zinc-200 text-zinc-400"
+            }`}>
               USUARIO ACTUAL
-              <div className="text-zinc-300 font-bold mt-1 text-xs">
+              <div className={`font-bold mt-1 text-xs ${
+                isDarkMode ? "text-zinc-300" : "text-zinc-800"
+              }`}>
                 {teamMembers.find(m => m.id === currentUserMemberId)?.name || "Pablo Miralles"}
               </div>
             </div>
@@ -600,7 +670,7 @@ export default function App() {
       )}
 
       {/* Primary body view content grid */}
-      <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+      <main className="flex-1 w-full max-w-[95%] xl:max-w-[1650px] mx-auto px-4 sm:px-6 py-6 space-y-6">
 
         {/* Interactive View tab controllers */}
         <div className={`hidden md:flex border-b pb-px ${
@@ -714,6 +784,7 @@ export default function App() {
                 tagsBank={tagsBank}
                 onAddTask={handleAddTask}
                 isDarkMode={isDarkMode}
+                holidays={holidays}
               />
             )}
 
@@ -725,6 +796,8 @@ export default function App() {
                 onUpdateVacation={handleUpdateVacation}
                 onDeleteVacation={handleDeleteVacation}
                 isDarkMode={isDarkMode}
+                isAdmin={!isAdminProtected || isAdminUnlocked}
+                holidays={holidays}
               />
             )}
 
@@ -797,12 +870,16 @@ export default function App() {
                   teamMembers={teamMembers}
                   tagsBank={tagsBank}
                   onAddTeamMember={handleAddTeamMember}
+                  onUpdateTeamMember={handleUpdateTeamMember}
                   onDeleteTeamMember={handleDeleteTeamMember}
                   onAddTag={handleAddTag}
                   onDeleteTag={handleDeleteTag}
                   isAdminProtected={isAdminProtected}
                   onSetAdminProtected={handleSetAdminProtected}
                   isDarkMode={isDarkMode}
+                  holidays={holidays}
+                  onAddHoliday={handleAddHoliday}
+                  onDeleteHoliday={handleDeleteHoliday}
                 />
               )
             )}

@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
 import { type Vacation, type TeamMember, type Role, RoleEnum } from "../types";
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Check, X, AlertCircle, Plus, Trash2, ShieldAlert, User } from "lucide-react";
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Check, X, AlertCircle, Plus, Trash2, ShieldAlert, User, Pencil } from "lucide-react";
 
 interface VacationMatrixProps {
   vacations: Vacation[];
@@ -9,6 +9,8 @@ interface VacationMatrixProps {
   onUpdateVacation: (vacation: Vacation) => Promise<{ success: boolean; message?: string }>;
   onDeleteVacation: (id: string) => Promise<void>;
   isDarkMode?: boolean;
+  isAdmin?: boolean;
+  holidays?: Holiday[];
 }
 
 interface CalendarDate {
@@ -30,30 +32,40 @@ export default function VacationMatrix({
   onAddVacation, 
   onUpdateVacation, 
   onDeleteVacation,
-  isDarkMode = true
+  isDarkMode = true,
+  isAdmin = false,
+  holidays = []
 }: VacationMatrixProps) {
   
   // Date viewport slider (June - October 2026 matching Gantt)
   type ViewMode = "day" | "week" | "month";
   const [viewMode, setViewMode] = useState<ViewMode>("week");
-  const [startDay, setStartDay] = useState(22);
-  const totalDaysInMonth = 30;
+  
+  const [viewportStartDate, setViewportStartDate] = useState<Date>(() => {
+    const today = new Date();
+    const day = today.getDay();
+    const diff = today.getDate() - (day === 0 ? 6 : day - 1);
+    return new Date(today.getFullYear(), today.getMonth(), diff, 12, 0, 0);
+  });
+
+  const monthLabels = ["ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SEP", "OCT", "NOV", "DIC"];
+  const monthNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const daysViewport = useMemo<CalendarDate[]>(() => {
     if (viewMode === "month") {
-      // 5 months starting from June 2026 (month index 5, i.e. June + July + August + September + October)
+      // 5 months starting from June 2026
       const list: CalendarDate[] = [];
       const months = [5, 6, 7, 8, 9]; // June, July, August, September, October
-      const monthLabels = ["JUN", "JUL", "AGO", "SEP", "OCT"];
-      const monthNames = ["Junio", "Julio", "Agosto", "Septiembre", "Octubre"];
+      const mLabels = ["JUN", "JUL", "AGO", "SEP", "OCT"];
+      const mNames = ["Junio", "Julio", "Agosto", "Septiembre", "Octubre"];
 
       months.forEach((m, idx) => {
         const totalDays = getDaysInMonth(2026, m);
         for (let d = 1; d <= totalDays; d++) {
-          const mLabel = monthLabels[idx];
-          const mName = monthNames[idx];
+          const mLabel = mLabels[idx];
+          const mName = mNames[idx];
           const dateStr = `2026-${(m + 1).toString().padStart(2, "0")}-${d.toString().padStart(2, "0")}`;
           list.push({
             id: dateStr,
@@ -67,32 +79,30 @@ export default function VacationMatrix({
       });
       return list;
     } else {
-      // "day" or "week" view for June
       const list: CalendarDate[] = [];
-      const len = viewMode === "day" ? 1 : 15; // default 15 days window or 1 day window
+      const len = viewMode === "day" ? 1 : 14; // shows current week & next week (14 days total)
       for (let i = 0; i < len; i++) {
-        const d = startDay + i;
-        if (d <= 30) {
-          const dateStr = `2026-06-${d.toString().padStart(2, "0")}`;
-          list.push({
-            id: dateStr,
-            day: d,
-            month: 5,
-            year: 2026,
-            monthLabel: "JUN",
-            monthName: "Junio"
-          });
-        }
+        const d = new Date(viewportStartDate);
+        d.setDate(viewportStartDate.getDate() + i);
+        const dateStr = `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, "0")}-${d.getDate().toString().padStart(2, "0")}`;
+        list.push({
+          id: dateStr,
+          day: d.getDate(),
+          month: d.getMonth(),
+          year: d.getFullYear(),
+          monthLabel: monthLabels[d.getMonth()],
+          monthName: monthNames[d.getMonth()]
+        });
       }
       return list;
     }
-  }, [viewMode, startDay]);
+  }, [viewMode, viewportStartDate]);
 
   const viewportSize = useMemo(() => {
     return daysViewport.length;
   }, [daysViewport]);
 
-  // Scroll to current day (June 25) automatically when component mounts or when viewMode changes
+  // Scroll to current day automatically when component mounts or when viewMode changes
   useEffect(() => {
     if (scrollContainerRef.current && daysViewport.length > 0) {
       setTimeout(() => {
@@ -102,8 +112,9 @@ export default function VacationMatrix({
         const totalWidth = container.scrollWidth;
         const clientWidth = container.clientWidth;
 
-        // Find today's date index (June 25, 2026) in the viewport
-        const todayIndex = daysViewport.findIndex(d => d.month === 5 && d.day === 25);
+        // Find today's date index in the viewport
+        const today = new Date();
+        const todayIndex = daysViewport.findIndex(d => d.year === today.getFullYear() && d.month === today.getMonth() && d.day === today.getDate());
 
         if (todayIndex !== -1) {
           const gridWidth = totalWidth - 220;
@@ -120,22 +131,33 @@ export default function VacationMatrix({
         }
       }, 150);
     }
-  }, [viewMode, startDay, daysViewport]);
+  }, [viewMode, viewportStartDate, daysViewport]);
 
   const handlePrevRange = () => {
-    setStartDay(prev => Math.max(1, prev - (viewMode === "day" ? 1 : 5)));
+    const step = viewMode === "day" ? 1 : 7;
+    setViewportStartDate(prev => {
+      const nextDate = new Date(prev);
+      nextDate.setDate(prev.getDate() - step);
+      return nextDate;
+    });
   };
 
   const handleNextRange = () => {
-    setStartDay(prev => Math.min(30 - viewportSize + 1, prev + (viewMode === "day" ? 1 : 5)));
+    const step = viewMode === "day" ? 1 : 7;
+    setViewportStartDate(prev => {
+      const nextDate = new Date(prev);
+      nextDate.setDate(prev.getDate() + step);
+      return nextDate;
+    });
   };
 
-  // Add Request Form States
+  // Add/Edit Request Form States
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [editingVacation, setEditingVacation] = useState<Vacation | null>(null);
   const [userId, setUserId] = useState(teamMembers[0]?.id || "");
   const [role, setRole] = useState<Role>("EXPANSOR");
-  const [startDate, setStartDate] = useState("2026-06-01");
-  const [endDate, setEndDate] = useState("2026-06-08");
+  const [startDate, setStartDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [endDate, setEndDate] = useState(() => new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]);
   const [selectedType, setSelectedType] = useState<string>("vacaciones");
   const [comment, setComment] = useState<string>("");
   const [errorText, setErrorText] = useState<string | null>(null);
@@ -188,29 +210,45 @@ export default function VacationMatrix({
     }
 
     try {
-      const payload = {
-        userId,
-        role,
-        startDate,
-        endDate,
-        status: "PENDING" as const,
-        type: selectedType,
-        comment: comment.trim() || undefined,
-      };
-
-      const res = await onAddVacation(payload);
-      if (res.success) {
-        setIsFormOpen(false);
-        // Reset defaults
-        setStartDate("2026-06-01");
-        setEndDate("2026-06-08");
-        setSelectedType("vacaciones");
-        setComment("");
+      if (editingVacation) {
+        const payload: Vacation = {
+          ...editingVacation,
+          userId,
+          role,
+          startDate,
+          endDate,
+          type: selectedType,
+          comment: comment.trim() || "",
+        };
+        const res = await onUpdateVacation(payload);
+        if (res.success) {
+          setIsFormOpen(false);
+          setEditingVacation(null);
+          setComment("");
+        } else {
+          setErrorText(res.message || "Error al actualizar la solicitud.");
+        }
       } else {
-        setErrorText(res.message || "Error al registrar la solicitud.");
+        const payload = {
+          userId,
+          role,
+          startDate,
+          endDate,
+          status: "PENDING" as const,
+          type: selectedType,
+          comment: comment.trim() || "",
+        };
+
+        const res = await onAddVacation(payload);
+        if (res.success) {
+          setIsFormOpen(false);
+          setComment("");
+        } else {
+          setErrorText(res.message || "Error al registrar la solicitud.");
+        }
       }
     } catch (err) {
-      setErrorText("Fallo de red al registrar la solicitud de vacaciones.");
+      setErrorText("Fallo de red al procesar la solicitud de vacaciones.");
     } finally {
       setIsSubmitting(false);
     }
@@ -259,10 +297,15 @@ export default function VacationMatrix({
                 key={mode}
                 onClick={() => {
                   setViewMode(mode);
-                  if (mode === "day" && startDay > 30) {
-                    setStartDay(1);
-                  } else if (mode === "week" && startDay > 16) {
-                    setStartDay(1);
+                  if (mode === "day") {
+                    setViewportStartDate(new Date());
+                  } else if (mode === "week") {
+                    const today = new Date();
+                    const day = today.getDay();
+                    const diff = today.getDate() - (day === 0 ? 6 : day - 1);
+                    setViewportStartDate(new Date(today.getFullYear(), today.getMonth(), diff, 12, 0, 0));
+                  } else if (mode === "month") {
+                    setViewportStartDate(new Date(2026, 5, 1, 12, 0, 0));
                   }
                 }}
                 className={`px-3 py-1 rounded-md text-sm font-bold uppercase tracking-wider transition-all cursor-pointer ${
@@ -273,7 +316,7 @@ export default function VacationMatrix({
                       : "text-zinc-650 hover:text-black hover:bg-slate-205"
                 }`}
               >
-                {mode === "day" ? "Día" : mode === "week" ? "15 Días" : "TODO"}
+                {mode === "day" ? "Día" : mode === "week" ? "Semana" : "TODO"}
               </button>
             ))}
           </div>
@@ -287,19 +330,23 @@ export default function VacationMatrix({
             }`}>
               <button
                 onClick={handlePrevRange}
-                disabled={startDay === 1}
                 className={`p-1 disabled:opacity-30 cursor-pointer transition ${
                   isDarkMode ? "hover:text-cyan-400 text-zinc-300" : "hover:text-cyan-600 text-zinc-600"
                 }`}
               >
                 <ChevronLeft size={16} />
               </button>
-              <span className="px-2 min-w-[124px] text-center uppercase font-bold text-sm">
-                {viewMode === "day" ? `Día ${startDay}` : `Días ${startDay} al ${Math.min(startDay + viewportSize - 1, totalDaysInMonth)}`} JUNIO
+              <span className="px-2 min-w-[124px] text-center uppercase font-bold text-sm text-lime-400">
+                {viewMode === "day" 
+                  ? `Día ${viewportStartDate.getDate()} ${monthNames[viewportStartDate.getMonth()]}` 
+                  : `Días ${viewportStartDate.getDate()} ${monthLabels[viewportStartDate.getMonth()]} al ${(() => {
+                      const endD = new Date(viewportStartDate);
+                      endD.setDate(viewportStartDate.getDate() + viewportSize - 1);
+                      return `${endD.getDate()} ${monthLabels[endD.getMonth()]}`;
+                    })()}`}
               </span>
               <button
                 onClick={handleNextRange}
-                disabled={startDay >= totalDaysInMonth - viewportSize + 1}
                 className={`p-1 disabled:opacity-30 cursor-pointer transition ${
                   isDarkMode ? "hover:text-cyan-400 text-zinc-300" : "hover:text-cyan-600 text-zinc-600"
                 }`}
@@ -339,28 +386,31 @@ export default function VacationMatrix({
           <div className={`flex items-center text-center font-mono text-sm font-bold border-b pb-2 ${
             isDarkMode ? "text-zinc-500 border-zinc-900/60" : "text-zinc-600 border-zinc-200"
           }`}>
-            <div className={`w-[220px] shrink-0 text-left pl-2 ${isDarkMode ? "text-zinc-500" : "text-zinc-800"}`}>
-              INTEGRANTE DEL EQUIPO
+            <div className={`w-[220px] shrink-0 text-left pl-2 sticky left-0 z-10 ${isDarkMode ? "text-zinc-500 bg-zinc-950" : "text-zinc-800 bg-white"}`}>
+              EQUIPO
             </div>
             <div className="flex-1 grid gap-1" style={{ gridTemplateColumns: `repeat(${viewportSize}, minmax(0, 1fr))` }}>
               {daysViewport.map(day => {
                 const isWeekend = isWeekendDay(day);
                 const wName = getWeekdayName(day);
+                const holiday = holidays.find(h => h.date === day.id);
                 
                 let headerBg = "";
-                if (isWeekend) {
+                if (holiday) {
+                  headerBg = isDarkMode ? "bg-purple-950/40 text-purple-400 border border-purple-850" : "bg-purple-100 text-purple-900 border border-purple-300 font-bold shadow-sm";
+                } else if (isWeekend) {
                   headerBg = isDarkMode ? "bg-zinc-900/60 text-zinc-500 border border-zinc-850" : "bg-slate-200/90 text-zinc-600 border border-slate-300";
                 } else {
                   headerBg = isDarkMode ? "bg-zinc-900/15 text-zinc-400 border border-transparent" : "bg-slate-50 text-zinc-700 border border-transparent";
                 }
 
                 return (
-                  <div key={day.id} className={`py-1 rounded flex flex-col items-center justify-center border transition-all ${headerBg}`}>
+                  <div key={day.id} className={`py-1 rounded flex flex-col items-center justify-center border transition-all ${headerBg}`} title={holiday ? `Día Festivo: ${holiday.name}` : undefined}>
                     <span className={`text-sm font-mono leading-none font-extrabold mb-0.5 ${
-                      isWeekend ? (isDarkMode ? "text-red-400" : "text-red-700") : (isDarkMode ? "text-zinc-500" : "text-zinc-400")
+                      holiday ? (isDarkMode ? "text-purple-400" : "text-purple-700") : isWeekend ? (isDarkMode ? "text-red-400" : "text-red-700") : (isDarkMode ? "text-zinc-500" : "text-zinc-400")
                     }`}>{wName}</span>
-                    <span className={`font-bold block text-sm leading-none ${isDarkMode ? "text-zinc-300" : "text-zinc-805"}`}>{day.day}</span>
-                    <span className={`text-sm font-mono opacity-60 leading-none mt-0.5 ${isDarkMode ? "text-zinc-500" : "text-zinc-450"}`}>{day.monthLabel}</span>
+                    <span className={`font-bold block text-sm leading-none ${holiday ? (isDarkMode ? "text-purple-300" : "text-purple-900") : isDarkMode ? "text-zinc-300" : "text-zinc-805"}`}>{day.day}</span>
+                    <span className={`text-sm font-mono opacity-60 leading-none mt-0.5 ${holiday ? (isDarkMode ? "text-purple-500" : "text-purple-650") : isDarkMode ? "text-zinc-500" : "text-zinc-450"}`}>{day.monthLabel}</span>
                   </div>
                 );
               })}
@@ -379,7 +429,9 @@ export default function VacationMatrix({
                 }`}
               >
                 {/* Team member name */}
-                <div className="w-[220px] shrink-0 pl-2 flex items-center gap-2">
+                <div className={`w-[220px] shrink-0 pl-2 flex items-center gap-2 sticky left-0 z-10 ${
+                  isDarkMode ? "bg-zinc-950" : "bg-white"
+                }`}>
                   <User size={14} className="text-[#00F3FF] shrink-0" />
                   <span className={`text-sm font-bold truncate ${
                     isDarkMode ? "text-zinc-200" : "text-black font-extrabold"
@@ -392,19 +444,34 @@ export default function VacationMatrix({
                 <div className="flex-1 grid gap-1 h-10" style={{ gridTemplateColumns: `repeat(${viewportSize}, minmax(0, 1fr))` }}>
                   {daysViewport.map(day => {
                     const vacation = getDayVacationStatus(member.id, day);
+                    const holiday = holidays.find(h => h.date === day.id);
                     const isWeekend = isWeekendDay(day);
 
                     let cellBgAndBorder = "";
                     if (vacation) {
                       if (vacation.status === "APPROVED") {
-                        cellBgAndBorder = isDarkMode
-                          ? "bg-teal-950/60 border-teal-500/40 text-[#A3FF00] shadow-[0_0_8px_rgba(20,184,166,0.05)]"
-                          : "bg-teal-100 border-teal-300 text-teal-900 font-bold shadow-sm";
+                        if (vacation.type === "curso") {
+                          cellBgAndBorder = isDarkMode
+                            ? "bg-blue-950/60 border-blue-500/40 text-blue-400 shadow-[0_0_8px_rgba(59,130,246,0.05)]"
+                            : "bg-blue-100 border-blue-300 text-blue-900 font-bold shadow-sm";
+                        } else if (vacation.type === "otro") {
+                          cellBgAndBorder = isDarkMode
+                            ? "bg-orange-950/60 border-orange-500/40 text-orange-400 shadow-[0_0_8px_rgba(249,115,22,0.05)]"
+                            : "bg-orange-100 border-orange-300 text-orange-900 font-bold shadow-sm";
+                        } else {
+                          cellBgAndBorder = isDarkMode
+                            ? "bg-teal-950/60 border-teal-500/40 text-[#A3FF00] shadow-[0_0_8px_rgba(20,184,166,0.05)]"
+                            : "bg-teal-100 border-teal-300 text-teal-900 font-bold shadow-sm";
+                        }
                       } else {
                         cellBgAndBorder = isDarkMode
-                          ? "bg-amber-950/40 border-amber-600/30 text-amber-500 border-dashed"
-                          : "bg-amber-50 border-amber-300 text-amber-900 border-dashed font-bold shadow-sm";
+                          ? "bg-zinc-900/40 border-zinc-800 text-zinc-500 border-dashed"
+                          : "bg-zinc-50 border-slate-200 text-zinc-600 border-dashed font-bold shadow-sm";
                       }
+                    } else if (holiday) {
+                      cellBgAndBorder = isDarkMode
+                        ? "bg-purple-950/40 border-purple-800/45 text-purple-400 font-semibold"
+                        : "bg-purple-50 border-purple-200 text-purple-850 font-semibold shadow-inner";
                     } else {
                       if (isWeekend) {
                         cellBgAndBorder = isDarkMode
@@ -424,7 +491,9 @@ export default function VacationMatrix({
                         title={
                           vacation 
                             ? `${member.name} - ${vacation.type ? vacation.type.toUpperCase() : "Vacaciones"} (${vacation.status === "APPROVED" ? "Aprobadas" : "Pendientes"})${vacation.comment ? `: ${vacation.comment}` : ""}: ${vacation.startDate} a ${vacation.endDate}`
-                            : `${member.name} - Disponible`
+                            : holiday
+                              ? `${member.name} - Festivo: ${holiday.name}`
+                              : `${member.name} - Disponible`
                         }
                       >
                         {vacation ? (
@@ -432,6 +501,10 @@ export default function VacationMatrix({
                             {vacation.status === "APPROVED" 
                               ? vacation.type === "curso" ? "CUR" : vacation.type === "otro" ? "OTR" : "VAC"
                               : "PEND"}
+                          </span>
+                        ) : holiday ? (
+                          <span className="text-[10px] font-bold font-mono uppercase text-purple-400 tracking-wider">
+                            FES
                           </span>
                         ) : null}
                       </div>
@@ -493,22 +566,42 @@ export default function VacationMatrix({
                     </div>
 
                     {/* ACTION INTERACTIVE BUTTONS for quick change */}
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => handleStatusChange(vac, "APPROVED")}
-                        title="Aprobar vacaciones"
-                        className="bg-teal-500/20 hover:bg-teal-500 text-teal-400 hover:text-black hover:scale-105 border border-teal-500/30 p-1.5 rounded-lg transition-all cursor-pointer"
-                      >
-                        <Check size={14} />
-                      </button>
-                      <button
-                        onClick={() => handleStatusChange(vac, "REJECTED")}
-                        title="Rechazar solicitud"
-                        className="bg-red-500/20 hover:bg-red-550 text-red-400 hover:text-white hover:scale-105 border border-red-500/30 p-1.5 rounded-lg transition-all cursor-pointer"
-                      >
-                        <X size={14} />
-                      </button>
-                    </div>
+                    {isAdmin && (
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => {
+                            setEditingVacation(vac);
+                            setUserId(vac.userId);
+                            const member = teamMembers.find(m => m.id === vac.userId);
+                            if (member) setRole(member.role);
+                            setStartDate(vac.startDate);
+                            setEndDate(vac.endDate);
+                            setSelectedType(vac.type || "vacaciones");
+                            setComment(vac.comment || "");
+                            setErrorText(null);
+                            setIsFormOpen(true);
+                          }}
+                          title="Editar solicitud"
+                          className="bg-cyan-500/20 hover:bg-cyan-500 text-cyan-400 hover:text-black hover:scale-105 border border-cyan-500/30 p-1.5 rounded-lg transition-all cursor-pointer"
+                        >
+                          <Pencil size={14} />
+                        </button>
+                        <button
+                          onClick={() => handleStatusChange(vac, "APPROVED")}
+                          title="Aprobar vacaciones"
+                          className="bg-teal-500/20 hover:bg-teal-500 text-teal-400 hover:text-black hover:scale-105 border border-teal-500/30 p-1.5 rounded-lg transition-all cursor-pointer"
+                        >
+                          <Check size={14} />
+                        </button>
+                        <button
+                          onClick={() => handleStatusChange(vac, "REJECTED")}
+                          title="Rechazar solicitud"
+                          className="bg-red-500/20 hover:bg-red-550 text-red-400 hover:text-white hover:scale-105 border border-red-500/30 p-1.5 rounded-lg transition-all cursor-pointer"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    )}
                   </div>
                 );
               })
@@ -586,21 +679,47 @@ export default function VacationMatrix({
                       }`}>
                         {isApproved ? "Aprobado" : "Rechazado"}
                       </span>
-                      <button
-                        onClick={() => {
-                          if (confirm("¿Seguro de retirar esta reserva de vacaciones del sistema?")) {
-                            onDeleteVacation(vac.id);
-                          }
-                        }}
-                        className={`p-1 rounded transition cursor-pointer ${
-                          isDarkMode 
-                            ? "text-zinc-600 hover:text-red-400 hover:bg-zinc-900" 
-                            : "text-zinc-400 hover:text-red-600 hover:bg-zinc-100"
-                        }`}
-                        title="Eliminar registro"
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                      {isAdmin && (
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => {
+                              setEditingVacation(vac);
+                              setUserId(vac.userId);
+                              const member = teamMembers.find(m => m.id === vac.userId);
+                              if (member) setRole(member.role);
+                              setStartDate(vac.startDate);
+                              setEndDate(vac.endDate);
+                              setSelectedType(vac.type || "vacaciones");
+                              setComment(vac.comment || "");
+                              setErrorText(null);
+                              setIsFormOpen(true);
+                            }}
+                            className={`p-1 rounded transition cursor-pointer ${
+                              isDarkMode 
+                                ? "text-zinc-650 hover:text-cyan-400 hover:bg-zinc-900" 
+                                : "text-zinc-405 hover:text-cyan-600 hover:bg-zinc-100"
+                            }`}
+                            title="Editar registro"
+                          >
+                            <Pencil size={14} />
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (confirm("¿Seguro de retirar esta reserva de vacaciones del sistema?")) {
+                                onDeleteVacation(vac.id);
+                              }
+                            }}
+                            className={`p-1 rounded transition cursor-pointer ${
+                              isDarkMode 
+                                ? "text-zinc-650 hover:text-red-400 hover:bg-zinc-900" 
+                                : "text-zinc-405 hover:text-red-650 hover:bg-zinc-100"
+                            }`}
+                            title="Eliminar registro"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
@@ -614,7 +733,7 @@ export default function VacationMatrix({
        {/* VACATION BOOKING MODAL */}
       {isFormOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
-          <div className={`w-full max-w-md rounded-xl overflow-hidden shadow-2xl border ${
+          <div className={`w-full max-w-md rounded-xl overflow-hidden shadow-2xl border flex flex-col max-h-[90vh] ${
             isDarkMode 
               ? "bg-zinc-950 border-zinc-850 text-zinc-100" 
               : "bg-white border-zinc-200 text-zinc-800"
@@ -624,11 +743,11 @@ export default function VacationMatrix({
               isDarkMode ? "bg-zinc-950 border-zinc-905 text-white" : "bg-slate-50 border-zinc-200 text-zinc-900"
             }`}>
               <div>
-                <h3 className="text-sm font-bold">Solicitar días libres</h3>
+                <h3 className="text-sm font-bold">{editingVacation ? "Editar solicitud" : "Solicitar días libres"}</h3>
                 <p className={`text-sm font-mono ${isDarkMode ? "text-zinc-500" : "text-zinc-400"}`}>Copia de seguridad del sistema</p>
               </div>
               <button 
-                onClick={() => setIsFormOpen(false)}
+                onClick={() => { setIsFormOpen(false); setEditingVacation(null); }}
                 className={`p-1 rounded-lg transition ${
                   isDarkMode ? "text-zinc-500 hover:text-white" : "text-zinc-400 hover:text-zinc-700"
                 }`}
@@ -648,7 +767,7 @@ export default function VacationMatrix({
               </div>
             )}
 
-            <form onSubmit={handleCreateVacationSubmit} className="p-4 space-y-4">
+            <form onSubmit={handleCreateVacationSubmit} className="p-4 space-y-4 overflow-y-auto flex-1">
               
               <div className="space-y-1">
                 <label className={`block text-sm font-mono font-medium ${isDarkMode ? "text-zinc-400" : "text-zinc-500"}`}>EMPLEADO / INTEGRANTE *</label>
@@ -681,9 +800,9 @@ export default function VacationMatrix({
                         : "bg-white border border-zinc-300 text-zinc-800"
                     }`}
                   >
-                    <option value="vacaciones" className={isDarkMode ? "bg-zinc-950" : "bg-white"}>vacaciones</option>
-                    <option value="curso" className={isDarkMode ? "bg-zinc-950" : "bg-white"}>curso</option>
-                    <option value="otro" className={isDarkMode ? "bg-zinc-950" : "bg-white"}>otro</option>
+                    <option value="vacaciones" className={isDarkMode ? "bg-zinc-950" : "bg-white"}>VACACIONES</option>
+                    <option value="curso" className={isDarkMode ? "bg-zinc-950" : "bg-white"}>CURSO</option>
+                    <option value="otro" className={isDarkMode ? "bg-zinc-950" : "bg-white"}>OTRO</option>
                   </select>
                 </div>
 
@@ -746,7 +865,7 @@ export default function VacationMatrix({
               }`}>
                 <button
                   type="button"
-                  onClick={() => setIsFormOpen(false)}
+                  onClick={() => { setIsFormOpen(false); setEditingVacation(null); }}
                   className={`px-3.5 py-1.5 border text-sm font-semibold rounded transition cursor-pointer ${
                     isDarkMode 
                       ? "border-zinc-850 hover:bg-zinc-900 text-zinc-300" 
@@ -760,7 +879,7 @@ export default function VacationMatrix({
                   disabled={isSubmitting}
                   className="px-3.5 py-1.5 bg-lime-500 hover:bg-lime-400 disabled:opacity-50 text-black text-sm font-bold rounded cursor-pointer shrink-0 transition"
                 >
-                  {isSubmitting ? "Sincronizando..." : "Registrar solicitud"}
+                  {isSubmitting ? "Sincronizando..." : editingVacation ? "Guardar cambios" : "Registrar solicitud"}
                 </button>
               </div>
 

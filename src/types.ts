@@ -17,7 +17,7 @@ export const TaskSchema = z.object({
   id: z.string().uuid({ message: "El ID de la tarea debe ser un UUID v4 válido." }),
   title: z.string().min(3, { message: "El título debe tener al menos 3 caracteres." }).max(100),
   routeId: z.string().min(1, { message: "La tarea debe estar vinculada a una ciudad logística (routeId)." }),
-  assignedPair: z.string().min(1, { message: "Debes asignar un responsable para la tarea." }),
+  assignedPair: z.array(z.string()).min(1, { message: "Debes asignar al menos un responsable para la tarea." }),
   priority: PriorityEnum,
   status: StatusEnum,
   dueDate: z.string(), // Fecha ISO o similar para el MVP
@@ -27,6 +27,7 @@ export const TaskSchema = z.object({
     title: z.string(),
     completed: z.boolean(),
   })).default([]),
+  completedAt: z.string().optional(),
 });
 
 /**
@@ -69,4 +70,10 @@ export interface RouteCity {
 export interface TagType {
   name: string;
   color: string;
+}
+
+export interface Holiday {
+  id: string;
+  date: string;
+  name: string;
 }

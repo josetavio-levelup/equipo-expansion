@@ -147,9 +147,10 @@ export default function KanbanBoard({
     if (!task) return;
     if (task.status === targetStatus) return;
 
-    const updatedTask = {
+    const updatedTask: Task = {
       ...task,
       status: targetStatus,
+      completedAt: targetStatus === "DONE" ? new Date().toISOString() : undefined,
     };
 
     const res = await onUpdateTask(updatedTask);
@@ -161,7 +162,7 @@ export default function KanbanBoard({
   // Form fields
   const [title, setTitle] = useState("");
   const [routeId, setRouteId] = useState("");
-  const [responsibleId, setResponsibleId] = useState("");
+  const [responsibleIds, setResponsibleIds] = useState<string[]>([]);
   const [priority, setPriority] = useState<Priority>("MEDIUM");
   const [status, setStatus] = useState<Status>("PENDING");
   const [dueDate, setDueDate] = useState("");
@@ -179,10 +180,9 @@ export default function KanbanBoard({
     setEditingTask(null);
     setTitle("");
     setRouteId(routeCities[0]?.id || "");
-    setResponsibleId(teamMembers[0]?.id || "");
+    setResponsibleIds([]);
     setPriority("MEDIUM");
     setStatus("PENDING");
-    // Default no-date preview so it is fully optional by default
     setDueDate("");
     setSelectedTags([]);
     setSubtasks([]);
@@ -196,7 +196,14 @@ export default function KanbanBoard({
     setTitle(task.title);
     setRouteId(task.routeId);
     
-    setResponsibleId(task.assignedPair || "");
+    // Support both old string format and new array format
+    if (Array.isArray(task.assignedPair)) {
+      setResponsibleIds(task.assignedPair);
+    } else if (typeof task.assignedPair === 'string' && task.assignedPair) {
+      setResponsibleIds((task.assignedPair as string).split('-').filter(Boolean));
+    } else {
+      setResponsibleIds([]);
+    }
     
     setPriority(task.priority);
     setStatus(task.status);
@@ -252,16 +259,20 @@ export default function KanbanBoard({
 
     const allCompleted = updatedSubtasks.length > 0 && updatedSubtasks.every(s => s.completed);
     let nextStatus = task.status;
+    let completedAt = task.completedAt;
     if (allCompleted) {
       nextStatus = "DONE";
+      completedAt = completedAt || new Date().toISOString();
     } else if (task.status === "DONE" && !allCompleted) {
       nextStatus = "IN_PROGRESS";
+      completedAt = undefined;
     }
 
-    const updatedTask = {
+    const updatedTask: Task = {
       ...task,
       subtasks: updatedSubtasks,
       status: nextStatus,
+      completedAt,
     };
     const res = await onUpdateTask(updatedTask);
     if (!res.success) {
@@ -274,6 +285,7 @@ export default function KanbanBoard({
     const updatedTask: Task = {
       ...task,
       status: isCompleted ? "PENDING" : "DONE",
+      completedAt: isCompleted ? undefined : new Date().toISOString(),
     };
     const res = await onUpdateTask(updatedTask);
     if (!res.success) {
@@ -286,21 +298,38 @@ export default function KanbanBoard({
     setErrorMessage(null);
     setIsSubmitting(true);
 
-    const pairString = responsibleId;
+    if (responsibleIds.length === 0) {
+      setErrorMessage("Debes asignar al menos un responsable.");
+      setIsSubmitting(false);
+      return;
+    }
+
     const tagsArray = selectedTags;
 
     // Use MIDDAY time format to standardise dates and prevent timezone shifting bugs
     const formattedDueDate = dueDate ? (dueDate.includes("T") ? dueDate : `${dueDate}T12:00:00`) : "";
 
+    const wasDone = editingTask?.status === "DONE";
+    const isNowDone = status === "DONE";
+    let completedAt = editingTask?.completedAt;
+    if (isNowDone) {
+      if (!wasDone || !completedAt) {
+        completedAt = new Date().toISOString();
+      }
+    } else {
+      completedAt = undefined;
+    }
+
     const taskPayload = {
       title,
       routeId,
-      assignedPair: pairString,
+      assignedPair: responsibleIds,
       priority,
       status,
       dueDate: formattedDueDate,
       tags: tagsArray,
       subtasks,
+      completedAt,
     };
 
     try {
@@ -339,9 +368,11 @@ export default function KanbanBoard({
     }
 
     if (nextIndex !== currentIndex) {
-      const updatedTask = {
+      const nextStatus = statusKeys[nextIndex];
+      const updatedTask: Task = {
         ...task,
-        status: statusKeys[nextIndex],
+        status: nextStatus,
+        completedAt: nextStatus === "DONE" ? new Date().toISOString() : undefined,
       };
       
       const res = await onUpdateTask(updatedTask);
@@ -356,10 +387,13 @@ export default function KanbanBoard({
   const getCityName = (id: string) => routeCities.find(c => c.id === id)?.name || id;
   const getMemberName = (id: string) => teamMembers.find(m => m.id === id)?.name || id;
 
-  const getResponsibleDisplayName = (pairStr: string) => {
-    if (!pairStr) return "Sin asignar";
-    const parts = pairStr.split("-").filter(Boolean);
-    return parts.map(id => getMemberName(id)).join(" ⇄ ");
+  const getResponsibleDisplayNames = (assignedPair: string | string[]): string[] => {
+    if (!assignedPair) return [];
+    // Support both old string and new array
+    const ids = Array.isArray(assignedPair)
+      ? assignedPair
+      : (assignedPair as string).split("-").filter(Boolean);
+    return ids.map(id => getMemberName(id)).filter(Boolean);
   };
 
   return (
@@ -397,17 +431,44 @@ export default function KanbanBoard({
       </div>
 
       {/* Grid Canvas columns */}
-      <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-4">
-        {columns.map(col => {
-          const filtered = onlyMyTasks 
-            ? tasks.filter(t => t.assignedPair && t.assignedPair.split("-").includes(currentUserMemberId))
-            : tasks;
-          const colTasks = filtered.filter(t => t.status === col.key);
-          const isOver = activeDragOverColumn === col.key;
+      <div className="w-full">
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+          {columns.map(col => {
+            const filtered = onlyMyTasks 
+              ? tasks.filter(t => {
+                  const ids = Array.isArray(t.assignedPair)
+                    ? t.assignedPair
+                    : (t.assignedPair as unknown as string || "").split("-").filter(Boolean);
+                  return ids.includes(currentUserMemberId);
+                })
+              : tasks;
+            // For DONE column, sort by completedAt descending (most recently completed first)
+            // For other columns, sort by nearest dueDate (tasks without date go last)
+            const colTasks = filtered
+              .filter(t => t.status === col.key)
+              .sort((a, b) => {
+                if (col.key === "DONE") {
+                  const compA = a.completedAt || "";
+                  const compB = b.completedAt || "";
+                  if (compA && compB) return new Date(compB).getTime() - new Date(compA).getTime();
+                  if (compA) return -1;
+                  if (compB) return 1;
+                }
+                if (!a.dueDate && !b.dueDate) return 0;
+                if (!a.dueDate) return 1;
+                if (!b.dueDate) return -1;
+                return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+              });
+            const isOver = activeDragOverColumn === col.key;
 
-          return (
-            <div 
-              key={col.key} 
+            return (
+              <div 
+                key={col.key} 
+                className={`w-full rounded-xl border p-4 flex flex-col min-h-[500px] transition-all duration-300 ${
+                  isOver 
+                    ? "bg-cyan-500/10 border-cyan-500 ring-2 ring-cyan-500/10" 
+                    : `${col.color} ${col.bg}`
+                }`}
               onDragOver={(e) => {
                 e.preventDefault();
                 if (activeDragOverColumn !== col.key) {
@@ -425,11 +486,6 @@ export default function KanbanBoard({
                   handleMoveDragTask(taskId, col.key);
                 }
               }}
-              className={`rounded-xl border p-4 flex flex-col min-h-[500px] transition-all duration-300 ${
-                isOver 
-                  ? "bg-cyan-500/10 border-cyan-500 ring-2 ring-cyan-500/10" 
-                  : `${col.color} ${col.bg}`
-              }`}
             >
               {/* Header column */}
               <div className="flex justify-between items-center mb-4 border-b border-zinc-900/10 dark:border-zinc-900 pb-2">
@@ -466,74 +522,84 @@ export default function KanbanBoard({
                             : "bg-white border-zinc-200 hover:border-zinc-300 hover:bg-slate-50 text-zinc-800 shadow-sm"
                         }`}
                       >
-                        {/* Task controls header */}
-                        <div className="flex justify-end items-center h-4 pb-0.5">
-                          {/* Item controls action buttons */}
-                          <div className="flex items-center gap-1.5 opacity-60 group-hover:opacity-100 transition-opacity">
+                         {/* Task controls header */}
+                        <div className="flex justify-between items-start">
+                          {/* Title + check */}
+                          <div className="flex items-start gap-2 flex-1 min-w-0">
+                            <button
+                              type="button"
+                              onClick={() => handleToggleMainTaskComplete(task)}
+                              className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 mt-0.5 transition-all cursor-pointer ${
+                                task.status === "DONE"
+                                  ? "bg-[#A3FF00] border-[#A3FF00] text-black shadow-[0_0_8px_rgba(163,255,0,0.3)]"
+                                  : "border-zinc-300 dark:border-zinc-700 text-transparent hover:border-[#A3FF00] hover:bg-[#A3FF00]/10"
+                              }`}
+                              title={task.status === "DONE" ? "Marcar como pendiente" : "Marcar como terminado"}
+                            >
+                              <span className="text-sm font-extrabold leading-none">
+                                {task.status === "DONE" ? "✓" : ""}
+                              </span>
+                            </button>
+                            <h4 
+                              title={task.title}
+                              className={`text-sm font-semibold leading-tight flex-1 transition-all ${
+                                task.status === "DONE" 
+                                  ? "line-through text-zinc-400 dark:text-zinc-500" 
+                                  : isDarkMode ? "text-zinc-100" : "text-zinc-800"
+                              }`}
+                            >
+                              {task.title}
+                            </h4>
+                          </div>
+                          {/* Edit / Delete buttons */}
+                          <div className="flex items-center gap-1 ml-2 shrink-0 opacity-40 group-hover:opacity-100 transition-opacity">
                             <button
                               onClick={() => openEditModal(task)}
                               title="Editar tarea"
-                              className="text-zinc-400 hover:text-cyan-500 p-0.5 rounded cursor-pointer"
+                              className="text-zinc-400 hover:text-cyan-500 p-1 rounded cursor-pointer"
                             >
                               <Edit2 size={12} />
                             </button>
                             <button
                               onClick={() => {
-                                if (confirm("¿Estás seguro de eliminar esta tarea del Bunker?")) {
+                                if (confirm("¿Estás seguro de eliminar esta tarea?")) {
                                   onDeleteTask(task.id);
                                 }
                               }}
-                              title="Eliminar del Bunker"
-                              className="text-zinc-400 hover:text-red-500 p-0.5 rounded cursor-pointer"
+                              title="Eliminar tarea"
+                              className="text-zinc-400 hover:text-red-500 p-1 rounded cursor-pointer"
                             >
                               <Trash2 size={12} />
                             </button>
                           </div>
                         </div>
 
-                        {/* Description label block with check icon to toggle status to DONE */}
-                        <div className="flex items-start gap-2 pt-0.5">
-                          <button
-                            type="button"
-                            onClick={() => handleToggleMainTaskComplete(task)}
-                            className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 mt-0.5 transition-all cursor-pointer ${
-                              task.status === "DONE"
-                                ? "bg-[#A3FF00] border-[#A3FF00] text-black shadow-[0_0_8px_rgba(163,255,0,0.3)]"
-                                : "border-zinc-300 dark:border-zinc-700 text-transparent hover:border-[#A3FF00] hover:bg-[#A3FF00]/10"
-                            }`}
-                            title={task.status === "DONE" ? "Marcar como pendiente" : "Marcar como terminado"}
-                          >
-                            <span className="text-sm font-extrabold leading-none">
-                              {task.status === "DONE" ? "✓" : ""}
-                            </span>
-                          </button>
-                          <h4 className={`text-sm font-semibold leading-tight flex-1 transition-all ${
-                            task.status === "DONE" 
-                              ? "line-through text-zinc-400 dark:text-zinc-500" 
-                              : isDarkMode ? "text-zinc-100" : "text-zinc-800"
-                          }`}>
-                            {task.title}
-                          </h4>
-                        </div>
-
                         {/* Responsible and Date displays */}
-                        <div className="space-y-1.5 text-sm font-mono">
-                          
-                          <div className="flex items-center gap-1.5 border-t border-zinc-100 dark:border-zinc-900/60 pt-1.5 mt-1 text-zinc-650 dark:text-zinc-300">
-                            <User size={14} className="text-[#00F3FF]" />
-                            <span className="truncate leading-none">
-                              {getResponsibleDisplayName(task.assignedPair)}
-                            </span>
+                        <div className="space-y-1.5 text-sm font-mono border-t border-zinc-100 dark:border-zinc-900/60 pt-2 mt-1">
+                          {/* Responsible persons */}
+                          <div className="flex flex-wrap gap-1">
+                            {getResponsibleDisplayNames(task.assignedPair).length > 0
+                              ? getResponsibleDisplayNames(task.assignedPair).map((name, i) => (
+                                  <span key={i} className={`inline-flex items-center gap-1 text-xs font-bold ${
+                                    isDarkMode ? "text-white" : "text-zinc-900"
+                                  }`}>
+                                    <User size={12} className="text-[#00F3FF] shrink-0" />
+                                    {name}
+                                  </span>
+                                ))
+                              : <span className={`text-xs ${isDarkMode ? "text-zinc-500" : "text-zinc-400"}`}>Sin asignar</span>
+                            }
                           </div>
                           
-                          <div className="flex items-center gap-1.5 text-zinc-400 dark:text-zinc-500 text-sm">
-                            <Calendar size={14} />
+                          <div className={`flex items-center gap-1.5 text-xs ${
+                            isDarkMode ? "text-zinc-500" : "text-zinc-400"
+                          }`}>
+                            <Calendar size={12} />
                             <span>
                               {task.dueDate ? new Date(task.dueDate).toLocaleDateString("es-ES", {
                                 day: "numeric",
                                 month: "long",
-                                year: "numeric",
-                              }) : "Sin fecha límite"}
+                              }) : "Sin fecha"}
                             </span>
                           </div>
                         </div>
@@ -565,7 +631,10 @@ export default function KanbanBoard({
                                   }`}>
                                     {sub.completed && <span className="text-sm font-bold">✓</span>}
                                   </span>
-                                  <span className={`truncate leading-tight flex-1 ${sub.completed ? "line-through text-zinc-400 dark:text-zinc-500" : "text-zinc-700 dark:text-zinc-350"}`}>
+                                  <span 
+                                    title={sub.title}
+                                    className={`truncate leading-tight flex-1 ${sub.completed ? "line-through text-zinc-400 dark:text-zinc-500" : "text-zinc-700 dark:text-zinc-350"}`}
+                                  >
                                     {sub.title}
                                   </span>
                                 </button>
@@ -604,12 +673,12 @@ export default function KanbanBoard({
             </div>
           );
         })}
-      </div>
+      </div></div>
 
       {/* TASK MODAL FOR CREATE & UPDATE */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm transition-all animate-fade-in">
-          <div className={`w-full max-w-xl rounded-xl overflow-hidden shadow-2xl relative border ${
+          <div className={`w-full max-w-xl rounded-xl overflow-hidden shadow-2xl relative border flex flex-col max-h-[90vh] ${
             isDarkMode 
               ? "bg-zinc-950 border-zinc-808 text-zinc-100" 
               : "bg-white border-zinc-200 text-zinc-800"
@@ -648,7 +717,7 @@ export default function KanbanBoard({
             )}
  
             {/* Main Form content wrapper */}
-            <form onSubmit={handleFormSubmit} className="p-5 space-y-4">
+            <form onSubmit={handleFormSubmit} className="p-5 space-y-4 overflow-y-auto flex-1">
               
               {/* Título */}
               <div className="space-y-1">
@@ -706,27 +775,49 @@ export default function KanbanBoard({
  
               </div>
  
-              {/* Persona responsable */}
-              <div className="space-y-1">
-                <label className={`block text-xs font-mono font-medium ${isDarkMode ? "text-zinc-400" : "text-zinc-500"}`}>Persona responsable</label>
-                <select
-                  value={responsibleId}
-                  onChange={(e) => setResponsibleId(e.target.value)}
-                  className={`w-full rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-cyan-500 focus:border-cyan-500 cursor-pointer ${
-                    isDarkMode 
-                      ? "bg-zinc-900 border border-zinc-808 text-white" 
-                      : "bg-white border border-zinc-300 text-zinc-800"
-                  }`}
-                >
-                  <option value="" disabled className={isDarkMode ? "bg-zinc-950 text-zinc-500" : "bg-white text-zinc-405"}>
-                    -- Selecciona un responsable del equipo --
-                  </option>
-                  {teamMembers.map(m => (
-                    <option key={m.id} value={m.id} className={isDarkMode ? "bg-zinc-950 text-white" : "bg-white text-zinc-800"}>
-                      {m.name} ({m.role})
-                    </option>
-                  ))}
-                </select>
+              {/* Personas responsables (multi-select) */}
+              <div className="space-y-1.5">
+                <label className={`block text-xs font-mono font-medium ${isDarkMode ? "text-zinc-400" : "text-zinc-500"}`}>Personas responsables</label>
+                <div className={`rounded border p-2 space-y-1 max-h-[150px] overflow-y-auto ${
+                  isDarkMode ? "bg-zinc-900 border-zinc-808" : "bg-white border-zinc-300"
+                }`}>
+                  {teamMembers.length === 0 ? (
+                    <span className={`text-xs italic ${isDarkMode ? "text-zinc-500" : "text-zinc-400"}`}>No hay integrantes del equipo</span>
+                  ) : (
+                    teamMembers.map(m => {
+                      const checked = responsibleIds.includes(m.id);
+                      return (
+                        <label key={m.id} className={`flex items-center gap-2.5 px-2 py-1.5 rounded cursor-pointer transition select-none ${
+                          checked
+                            ? isDarkMode ? "bg-cyan-500/10 border border-cyan-500/30" : "bg-cyan-50 border border-cyan-300/50"
+                            : isDarkMode ? "hover:bg-zinc-800" : "hover:bg-slate-50 border border-transparent"
+                        }`}>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => {
+                              setResponsibleIds(prev =>
+                                prev.includes(m.id)
+                                  ? prev.filter(id => id !== m.id)
+                                  : [...prev, m.id]
+                              );
+                            }}
+                            className={`rounded focus:ring-0 ${isDarkMode ? "bg-zinc-800 border-zinc-700 text-cyan-500" : "bg-white border-zinc-300 text-cyan-600"}`}
+                          />
+                          <span className={`text-sm font-medium ${
+                            isDarkMode ? "text-zinc-200" : "text-zinc-800"
+                          }`}>{m.name}</span>
+                          {checked && <span className="ml-auto text-cyan-500 text-xs">✓</span>}
+                        </label>
+                      );
+                    })
+                  )}
+                </div>
+                {responsibleIds.length > 0 && (
+                  <p className={`text-[10px] font-mono ${isDarkMode ? "text-zinc-500" : "text-zinc-400"}`}>
+                    {responsibleIds.length} persona{responsibleIds.length > 1 ? "s" : ""} asignada{responsibleIds.length > 1 ? "s" : ""}
+                  </p>
+                )}
               </div>
  
               {/* Checklist de subtareas */}

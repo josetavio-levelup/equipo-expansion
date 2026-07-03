@@ -48,7 +48,7 @@ let tasks: Task[] = [
     id: "f3b3b2b1-1234-4bc1-9abc-123456789001",
     title: "Inspección de local comercial Av. Francia",
     routeId: "valencia",
-    assignedPair: "t_carlos-e_pablo",
+    assignedPair: ["t_carlos", "e_pablo"],
     priority: "HIGH",
     status: "IN_PROGRESS",
     dueDate: "2026-06-05T10:00:00.000Z",
@@ -63,7 +63,7 @@ let tasks: Task[] = [
     id: "f3b3b2b1-1234-4bc1-9abc-123456789002",
     title: "Firma de Escrituras Madrid Norte",
     routeId: "madrid",
-    assignedPair: "t_sofia-e_laura",
+    assignedPair: ["t_sofia", "e_laura"],
     priority: "CRITICAL",
     status: "URGENT",
     dueDate: "2026-06-12T12:00:00.000Z",
@@ -77,7 +77,7 @@ let tasks: Task[] = [
     id: "f3b3b2b1-1234-4bc1-9abc-123456789003",
     title: "Auditoría de Procesos de Formación",
     routeId: "barcelona",
-    assignedPair: "t_carlos-e_jaime",
+    assignedPair: ["t_carlos", "e_jaime"],
     priority: "MEDIUM",
     status: "PENDING",
     dueDate: "2026-06-20T09:00:00.000Z",
@@ -121,7 +121,7 @@ let vacations: Vacation[] = [
 
 // Helper to determine active conflicts (Vacation lock check)
 function checkVacationConflictDynamic(
-  assignedPair: string, 
+  assignedPair: string | string[], 
   dueDateStr: string, 
   currentVacations: Vacation[], 
   currentTeam: TeamMember[]
@@ -129,7 +129,9 @@ function checkVacationConflictDynamic(
   if (!dueDateStr) {
     return { hasConflict: false };
   }
-  const parts = assignedPair.split("-").filter(Boolean);
+  const parts = Array.isArray(assignedPair)
+    ? assignedPair
+    : (assignedPair as string).split("-").filter(Boolean);
   if (parts.length === 0) {
     return { hasConflict: false };
   }
@@ -207,7 +209,7 @@ async function fetchAllFromSheet(token: string, spreadsheetId: string) {
         id: r[0],
         title: r[1],
         routeId: r[2] || "",
-        assignedPair: r[3] || "",
+        assignedPair: r[3] ? r[3].split(",").map((s: string) => s.trim()).filter(Boolean) : [],
         priority: (r[4] || "LOW") as any,
         status: (r[5] || "PENDING") as any,
         dueDate: r[6] || "",
@@ -404,7 +406,7 @@ app.post("/api/sheets/setup", async (req, res) => {
               t.id,
               t.title,
               t.routeId,
-              t.assignedPair,
+            t.assignedPair ? (Array.isArray(t.assignedPair) ? t.assignedPair.join(",") : t.assignedPair) : "",
               t.priority,
               t.status,
               t.dueDate,
@@ -788,7 +790,7 @@ app.post("/api/tasks", async (req, res) => {
           t.id,
           t.title,
           t.routeId,
-          t.assignedPair,
+          t.assignedPair ? (Array.isArray(t.assignedPair) ? t.assignedPair.join(",") : t.assignedPair) : "",
           t.priority,
           t.status,
           t.dueDate,
@@ -853,7 +855,7 @@ app.put("/api/tasks/:id", async (req, res) => {
           t.id,
           t.title,
           t.routeId,
-          t.assignedPair,
+          t.assignedPair ? (Array.isArray(t.assignedPair) ? t.assignedPair.join(",") : t.assignedPair) : "",
           t.priority,
           t.status,
           t.dueDate,
@@ -902,7 +904,7 @@ app.delete("/api/tasks/:id", async (req, res) => {
           t.id,
           t.title,
           t.routeId,
-          t.assignedPair,
+          t.assignedPair ? (Array.isArray(t.assignedPair) ? t.assignedPair.join(",") : t.assignedPair) : "",
           t.priority,
           t.status,
           t.dueDate,

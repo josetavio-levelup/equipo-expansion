@@ -10,6 +10,7 @@ interface GanttTimelineProps {
   tagsBank?: TagType[];
   onAddTask?: (task: Omit<Task, "id">) => Promise<{ success: boolean; message?: string }>;
   isDarkMode?: boolean;
+  holidays?: Holiday[];
 }
 
 interface CalendarDate {
@@ -32,13 +33,22 @@ export default function GanttTimeline({
   vacations, 
   tagsBank = [], 
   onAddTask,
-  isDarkMode = true
+  isDarkMode = true,
+  holidays = []
 }: GanttTimelineProps) {
   // View types: day, week, month
   type ViewMode = "day" | "week" | "month";
   const [viewMode, setViewMode] = useState<ViewMode>("week");
-  const [startDay, setStartDay] = useState(22);
-  const totalDaysInMonth = 30;
+  
+  const [viewportStartDate, setViewportStartDate] = useState<Date>(() => {
+    const today = new Date();
+    const day = today.getDay();
+    const diff = today.getDate() - (day === 0 ? 6 : day - 1);
+    return new Date(today.getFullYear(), today.getMonth(), diff, 12, 0, 0);
+  });
+
+  const monthLabels = ["ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SEP", "OCT", "NOV", "DIC"];
+  const monthNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 
   // New task form fields
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -57,17 +67,17 @@ export default function GanttTimeline({
 
   const daysViewport = useMemo<CalendarDate[]>(() => {
     if (viewMode === "month") {
-      // 5 months starting from June 2026 (month index 5, i.e. June + July + August + September + October)
+      // 5 months starting from June 2026
       const list: CalendarDate[] = [];
       const months = [5, 6, 7, 8, 9]; // June, July, August, September, October
-      const monthLabels = ["JUN", "JUL", "AGO", "SEP", "OCT"];
-      const monthNames = ["Junio", "Julio", "Agosto", "Septiembre", "Octubre"];
+      const mLabels = ["JUN", "JUL", "AGO", "SEP", "OCT"];
+      const mNames = ["Junio", "Julio", "Agosto", "Septiembre", "Octubre"];
 
       months.forEach((m, idx) => {
         const totalDays = getDaysInMonth(2026, m);
         for (let d = 1; d <= totalDays; d++) {
-          const mLabel = monthLabels[idx];
-          const mName = monthNames[idx];
+          const mLabel = mLabels[idx];
+          const mName = mNames[idx];
           const dateStr = `2026-${(m + 1).toString().padStart(2, "0")}-${d.toString().padStart(2, "0")}`;
           list.push({
             id: dateStr,
@@ -81,32 +91,30 @@ export default function GanttTimeline({
       });
       return list;
     } else {
-      // "day" or "week" view for June
       const list: CalendarDate[] = [];
-      const len = viewMode === "day" ? 1 : 7;
+      const len = viewMode === "day" ? 1 : 14;
       for (let i = 0; i < len; i++) {
-        const d = startDay + i;
-        if (d <= 30) {
-          const dateStr = `2026-06-${d.toString().padStart(2, "0")}`;
-          list.push({
-            id: dateStr,
-            day: d,
-            month: 5,
-            year: 2026,
-            monthLabel: "JUN",
-            monthName: "Junio"
-          });
-        }
+        const d = new Date(viewportStartDate);
+        d.setDate(viewportStartDate.getDate() + i);
+        const dateStr = `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, "0")}-${d.getDate().toString().padStart(2, "0")}`;
+        list.push({
+          id: dateStr,
+          day: d.getDate(),
+          month: d.getMonth(),
+          year: d.getFullYear(),
+          monthLabel: monthLabels[d.getMonth()],
+          monthName: monthNames[d.getMonth()]
+        });
       }
       return list;
     }
-  }, [viewMode, startDay]);
+  }, [viewMode, viewportStartDate]);
 
   const viewportSize = useMemo(() => {
     return daysViewport.length;
   }, [daysViewport]);
 
-  // Scroll to current day (June 25) automatically when component mounts or when viewMode changes
+  // Scroll to current day automatically when component mounts or when viewMode changes
   useEffect(() => {
     if (scrollContainerRef.current && daysViewport.length > 0) {
       setTimeout(() => {
@@ -116,8 +124,9 @@ export default function GanttTimeline({
         const totalWidth = container.scrollWidth;
         const clientWidth = container.clientWidth;
 
-        // Find today's date index (June 25, 2026) in the viewport
-        const todayIndex = daysViewport.findIndex(d => d.month === 5 && d.day === 25);
+        // Find today's date index in the viewport
+        const today = new Date();
+        const todayIndex = daysViewport.findIndex(d => d.year === today.getFullYear() && d.month === today.getMonth() && d.day === today.getDate());
 
         if (todayIndex !== -1) {
           const gridWidth = totalWidth - 220;
@@ -134,7 +143,7 @@ export default function GanttTimeline({
         }
       }, 150);
     }
-  }, [viewMode, startDay, daysViewport]);
+  }, [viewMode, viewportStartDate, daysViewport]);
 
   const openCreateModal = () => {
     setTitle("");
@@ -152,30 +161,38 @@ export default function GanttTimeline({
 
   const handlePrevRange = () => {
     const step = viewMode === "day" ? 1 : 7;
-    setStartDay(prev => Math.max(1, prev - step));
+    setViewportStartDate(prev => {
+      const nextDate = new Date(prev);
+      nextDate.setDate(prev.getDate() - step);
+      return nextDate;
+    });
   };
 
   const handleNextRange = () => {
     const step = viewMode === "day" ? 1 : 7;
-    setStartDay(prev => Math.min(totalDaysInMonth - (viewMode === "day" ? 1 : 7) + 1, prev + step));
+    setViewportStartDate(prev => {
+      const nextDate = new Date(prev);
+      nextDate.setDate(prev.getDate() + step);
+      return nextDate;
+    });
   };
 
   // Helper names
   const getMemberName = (id: string) => teamMembers.find(m => m.id === id)?.name || id;
-  const getPairShortNames = (pairStr: string) => {
-    if (!pairStr) return "Sin asignar";
-    const parts = pairStr.split("-").filter(Boolean);
-    if (parts.length === 1) {
-      return getMemberName(parts[0]).split(" ")[0];
-    }
-    const trainerShort = getMemberName(parts[0] || "").split(" ")[0];
-    const expansorShort = getMemberName(parts[1] || "").split(" ")[0];
-    return `${trainerShort} + ${expansorShort}`;
+  const getPairShortNames = (assignedPair: string | string[]) => {
+    if (!assignedPair) return "Sin asignar";
+    const parts = Array.isArray(assignedPair)
+      ? assignedPair
+      : (assignedPair as string).split("-").filter(Boolean);
+    if (parts.length === 0) return "Sin asignar";
+    return parts.map(id => getMemberName(id).split(" ")[0]).join(" + ");
   };
 
   const isAssignedToMember = (task: Task, memberId: string) => {
     if (!task.assignedPair) return false;
-    const parts = task.assignedPair.split("-");
+    const parts = Array.isArray(task.assignedPair)
+      ? task.assignedPair
+      : (task.assignedPair as unknown as string).split("-").filter(Boolean);
     return parts.includes(memberId);
   };
 
@@ -246,7 +263,7 @@ export default function GanttTimeline({
     const taskPayload = {
       title,
       routeId,
-      assignedPair: pairString,
+      assignedPair: responsibleId ? [responsibleId] : [],
       priority,
       status,
       dueDate: formattedDueDate,
@@ -283,11 +300,7 @@ export default function GanttTimeline({
             <span className="w-2.5 h-2.5 rounded-full bg-lime-400 inline-block animate-pulse" />
             Calendario
           </h2>
-          <p className={`text-xs mt-0.5 ${
-            isDarkMode ? "text-zinc-400" : "text-zinc-550"
-          }`}>
-            Agenda mensual de aperturas y actividades del equipo · Junio 2026
-          </p>
+
         </div>
 
         {/* Viewport controls and Add button wrapper */}
@@ -304,11 +317,14 @@ export default function GanttTimeline({
                 onClick={() => {
                   setViewMode(mode);
                   if (mode === "day") {
-                    setStartDay(25);
+                    setViewportStartDate(new Date());
                   } else if (mode === "week") {
-                    setStartDay(22);
+                    const today = new Date();
+                    const day = today.getDay();
+                    const diff = today.getDate() - (day === 0 ? 6 : day - 1);
+                    setViewportStartDate(new Date(today.getFullYear(), today.getMonth(), diff, 12, 0, 0));
                   } else if (mode === "month") {
-                    setStartDay(1);
+                    setViewportStartDate(new Date(2026, 5, 1, 12, 0, 0));
                   }
                 }}
                 className={`px-3 py-1 rounded-md text-sm font-bold uppercase tracking-wider transition-all cursor-pointer ${
@@ -335,19 +351,23 @@ export default function GanttTimeline({
               }`}>
                 <button
                   onClick={handlePrevRange}
-                  disabled={startDay === 1}
                   className={`p-1 disabled:opacity-30 cursor-pointer transition ${
                     isDarkMode ? "hover:text-cyan-400 text-zinc-300" : "hover:text-cyan-600 text-zinc-600"
                   }`}
                 >
                   <ChevronLeft size={16} />
                 </button>
-                <span className="px-2 min-w-[124px] text-center uppercase font-bold text-sm">
-                  {viewMode === "day" ? `Día ${startDay} de Junio` : `Días ${startDay} al ${Math.min(startDay + viewportSize - 1, totalDaysInMonth)} Junio`}
+                <span className="px-2 min-w-[124px] text-center uppercase font-bold text-sm text-cyan-400">
+                  {viewMode === "day" 
+                    ? `Día ${viewportStartDate.getDate()} de ${monthNames[viewportStartDate.getMonth()]}` 
+                    : `Días ${viewportStartDate.getDate()} ${monthLabels[viewportStartDate.getMonth()]} al ${(() => {
+                        const endD = new Date(viewportStartDate);
+                        endD.setDate(viewportStartDate.getDate() + viewportSize - 1);
+                        return `${endD.getDate()} ${monthLabels[endD.getMonth()]}`;
+                      })()}`}
                 </span>
                 <button
                   onClick={handleNextRange}
-                  disabled={startDay >= totalDaysInMonth - viewportSize + 1}
                   className={`p-1 disabled:opacity-30 cursor-pointer transition ${
                     isDarkMode ? "hover:text-cyan-400 text-zinc-300" : "hover:text-cyan-600 text-zinc-600"
                   }`}
@@ -394,18 +414,22 @@ export default function GanttTimeline({
             isDarkMode ? "text-zinc-500 border-zinc-900" : "text-zinc-600 border-zinc-200"
           }`}>
             
-            <div className={`w-[220px] shrink-0 text-left pl-2 ${isDarkMode ? "text-zinc-500" : "text-zinc-850"}`}>
-              INTEGRANTE DEL EQUIPO
+            <div className={`w-[220px] shrink-0 text-left pl-2 sticky left-0 z-10 ${isDarkMode ? "text-zinc-500 bg-zinc-950" : "text-zinc-850 bg-white"}`}>
+              EQUIPO
             </div>
 
             <div className="flex-1 grid gap-1" style={{ gridTemplateColumns: `repeat(${viewportSize}, minmax(0, 1fr))` }}>
               {daysViewport.map(day => {
                 const isWeekend = isWeekendDay(day);
                 const wName = getWeekdayName(day, viewMode);
-                const isToday = day.month === 5 && day.day === 25;
+                const today = new Date();
+                const isToday = day.year === today.getFullYear() && day.month === today.getMonth() && day.day === today.getDate();
+                const holiday = holidays.find(h => h.date === day.id);
                 
                 let dayBgClass = "";
-                if (isToday) {
+                if (holiday) {
+                  dayBgClass = isDarkMode ? "bg-purple-950/40 text-purple-400 border border-purple-850" : "bg-purple-100 text-purple-900 border border-purple-300 font-bold shadow-sm";
+                } else if (isToday) {
                   dayBgClass = isDarkMode ? "bg-cyan-500/10 text-[#00F3FF] border border-cyan-500/30 font-extrabold" : "bg-cyan-100 text-cyan-800 border border-cyan-400 font-extrabold shadow-sm";
                 } else if (isWeekend) {
                   dayBgClass = isDarkMode ? "bg-zinc-900/60 text-zinc-500 border border-zinc-850" : "bg-slate-200/90 text-zinc-600 border border-slate-300";
@@ -417,12 +441,13 @@ export default function GanttTimeline({
                   <div 
                     key={day.id} 
                     className={`py-1 px-1 rounded flex flex-col items-center justify-center transition-all ${dayBgClass}`}
+                    title={holiday ? `Día Festivo: ${holiday.name}` : undefined}
                   >
                     <span className={`text-sm font-mono leading-none tracking-wider font-extrabold mb-0.5 ${
-                      isToday ? "text-[#00F3FF]" : isWeekend ? (isDarkMode ? "text-red-400" : "text-red-700") : (isDarkMode ? "text-zinc-500" : "text-zinc-500")
+                      holiday ? "text-purple-400" : isToday ? "text-[#00F3FF]" : isWeekend ? (isDarkMode ? "text-red-400" : "text-red-700") : (isDarkMode ? "text-zinc-500" : "text-zinc-500")
                     }`}>{wName}</span>
-                    <span className={`font-bold text-sm leading-none ${isToday ? "text-[#00F3FF]" : isDarkMode ? "text-zinc-200" : "text-zinc-900"}`}>{day.day}</span>
-                    <span className={`text-sm font-mono opacity-60 leading-none mt-0.5 ${isToday ? "text-[#00F3FF]" : isDarkMode ? "text-zinc-500" : "text-zinc-400"}`}>{day.monthLabel}</span>
+                    <span className={`font-bold text-sm leading-none ${holiday ? "text-purple-300" : isToday ? "text-[#00F3FF]" : isDarkMode ? "text-zinc-200" : "text-zinc-900"}`}>{day.day}</span>
+                    <span className={`text-sm font-mono opacity-60 leading-none mt-0.5 ${holiday ? "text-purple-500" : isToday ? "text-[#00F3FF]" : isDarkMode ? "text-zinc-500" : "text-zinc-400"}`}>{day.monthLabel}</span>
                   </div>
                 );
               })}
@@ -449,7 +474,9 @@ export default function GanttTimeline({
                   }`}
                 >
                   {/* Team member name */}
-                  <div className="w-[220px] shrink-0 flex items-center gap-2 pl-2">
+                  <div className={`w-[220px] shrink-0 flex items-center gap-2 pl-2 sticky left-0 z-10 ${
+                    isDarkMode ? "bg-zinc-950" : "bg-white"
+                  }`}>
                     <User size={14} className="text-[#00F3FF] shrink-0" />
                     <span className={`text-sm font-semibold block truncate ${
                       isDarkMode ? "text-zinc-200" : "text-black font-bold"
@@ -463,24 +490,39 @@ export default function GanttTimeline({
                     {daysViewport.map(day => {
                       const dayTasks = getTasksForDayAndMember(member.id, day);
                       const dayVacations = getVacationsForDayAndMember(member.id, day);
+                      const holiday = holidays.find(h => h.date === day.id);
                       const isWeekend = isWeekendDay(day);
                       
                       let cellClass = "";
                       if (isDarkMode) {
-                        cellClass = isWeekend
-                          ? "bg-zinc-950/90 border border-zinc-900 hover:bg-zinc-950 shadow-inner"
-                          : "bg-zinc-900/10 border border-zinc-900/30 hover:bg-zinc-900/30";
+                        if (holiday) {
+                          cellClass = "bg-purple-950/20 border border-purple-900/40 hover:bg-purple-950/40";
+                        } else {
+                          cellClass = isWeekend
+                            ? "bg-zinc-950/90 border border-zinc-900 hover:bg-zinc-950 shadow-inner"
+                            : "bg-zinc-900/10 border border-zinc-900/30 hover:bg-zinc-900/30";
+                        }
                       } else {
-                        cellClass = isWeekend
-                          ? "bg-slate-200/60 border border-slate-300 hover:bg-slate-200 shadow-inner"
-                          : "bg-slate-50 border border-slate-200/85 hover:bg-slate-100";
+                        if (holiday) {
+                          cellClass = "bg-purple-50 border border-purple-200 hover:bg-purple-100/70 shadow-inner";
+                        } else {
+                          cellClass = isWeekend
+                            ? "bg-slate-200/60 border border-slate-300 hover:bg-slate-200 shadow-inner"
+                            : "bg-slate-50 border border-slate-200/85 hover:bg-slate-100";
+                        }
                       }
 
                       return (
                         <div 
                           key={day.id} 
                           className={`relative rounded p-1 flex flex-col gap-1 items-stretch justify-start group min-h-[48px] transition ${cellClass}`}
+                          title={holiday ? `Día Festivo: ${holiday.name}` : undefined}
                         >
+                          {holiday && dayTasks.length === 0 && dayVacations.length === 0 && (
+                            <span className="text-[10px] font-bold font-mono uppercase text-purple-400 text-center mt-2">
+                              FESTIVO
+                            </span>
+                          )}
                           {/* Rendering day's tasks */}
                           {dayTasks.map(task => (
                             <div 
@@ -532,26 +574,45 @@ export default function GanttTimeline({
                           {dayVacations.map(vac => {
                             const emoji = vac.type === "curso" ? "📚" : vac.type === "otro" ? "📌" : "🌴";
                             const typeLabel = (vac.type || "vacaciones").toUpperCase();
+                            const isCurso = vac.type === "curso";
+                            const isOtro = vac.type === "otro";
+
+                            let cardClasses = "";
+                            let textClasses = "";
+                            let commentClasses = "";
+
+                            if (isCurso) {
+                              cardClasses = isDarkMode
+                                ? "border-blue-500/30 bg-blue-950/30 text-blue-300 hover:bg-blue-950/50"
+                                : "border-blue-400/50 bg-blue-100/90 hover:bg-blue-100 text-blue-900 shadow-sm";
+                              textClasses = isDarkMode ? "text-blue-300" : "text-blue-900 font-extrabold";
+                              commentClasses = isDarkMode ? "text-zinc-400" : "text-blue-800 font-bold";
+                            } else if (isOtro) {
+                              cardClasses = isDarkMode
+                                ? "border-orange-500/30 bg-orange-950/30 text-orange-300 hover:bg-orange-950/50"
+                                : "border-orange-400/50 bg-orange-100/90 hover:bg-orange-100 text-orange-900 shadow-sm";
+                              textClasses = isDarkMode ? "text-orange-300" : "text-orange-900 font-extrabold";
+                              commentClasses = isDarkMode ? "text-zinc-400" : "text-orange-850 font-bold";
+                            } else {
+                              cardClasses = isDarkMode
+                                ? "border-emerald-500/30 bg-emerald-950/30 text-emerald-300 hover:bg-emerald-950/50"
+                                : "border-emerald-400/50 bg-emerald-100/90 hover:bg-emerald-100 text-emerald-900 shadow-sm";
+                              textClasses = isDarkMode ? "text-emerald-300" : "text-emerald-900 font-extrabold";
+                              commentClasses = isDarkMode ? "text-zinc-400" : "text-emerald-805 font-bold";
+                            }
+
                             return (
                               <div 
                                 key={vac.id}
                                 title={`${typeLabel}${vac.comment ? `: ${vac.comment}` : ""}`}
-                                className={`rounded border px-2 py-1.5 flex flex-col justify-center overflow-hidden cursor-pointer select-none transition ${
-                                  isDarkMode 
-                                    ? "border-amber-500/30 bg-amber-950/30 text-amber-300 hover:bg-amber-950/50" 
-                                    : "border-amber-400/50 bg-amber-100/90 hover:bg-amber-100 text-black shadow-sm"
-                                }`}
+                                className={`rounded border px-2 py-1.5 flex flex-col justify-center overflow-hidden cursor-pointer select-none transition ${cardClasses}`}
                               >
-                                <span className={`text-sm font-bold uppercase tracking-tight truncate leading-tight flex items-center gap-1 ${
-                                  isDarkMode ? "text-amber-300" : "text-amber-900 font-extrabold"
-                                }`}>
+                                <span className={`text-sm font-bold uppercase tracking-tight truncate leading-tight flex items-center gap-1 ${textClasses}`}>
                                   <span>{emoji}</span>
                                   <span>{typeLabel}</span>
                                 </span>
                                 {vac.comment && (
-                                  <span className={`text-sm truncate leading-none mt-0.5 font-sans italic font-medium ${
-                                    isDarkMode ? "text-zinc-400" : "text-amber-800 font-bold"
-                                  }`}>
+                                  <span className={`text-sm truncate leading-none mt-0.5 font-sans italic font-medium ${commentClasses}`}>
                                     {vac.comment}
                                   </span>
                                 )}
@@ -595,7 +656,7 @@ export default function GanttTimeline({
       {/* TASK CREATION MODAL */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm transition-all animate-fade-in">
-          <div className={`w-full max-w-xl rounded-xl overflow-hidden shadow-2xl relative animate-scale-up border ${
+          <div className={`w-full max-w-xl rounded-xl overflow-hidden shadow-2xl relative animate-scale-up border flex flex-col max-h-[90vh] ${
             isDarkMode 
               ? "bg-zinc-950 border-zinc-808 text-zinc-100" 
               : "bg-white border-zinc-200 text-zinc-800"
@@ -636,7 +697,7 @@ export default function GanttTimeline({
             )}
 
             {/* Main Form content wrapper */}
-            <form onSubmit={handleFormSubmit} className="p-5 space-y-4 text-left">
+            <form onSubmit={handleFormSubmit} className="p-5 space-y-4 text-left overflow-y-auto flex-1">
               
               {/* Título */}
               <div className="space-y-1">

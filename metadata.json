@@ -1,5 +1,5 @@
 {
-  "name": "LevelUp Logistics Manager",
+  "name": "Equipo Expansión",
   "description": "MVP para planificación logística de la expansión y matriz de vacaciones del equipo. Incluye Kanban interactivo, Gantt temporizado y control estricto de solapamientos.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]

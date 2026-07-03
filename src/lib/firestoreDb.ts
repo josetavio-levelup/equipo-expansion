@@ -10,7 +10,7 @@ import {
   type Unsubscribe,
 } from "firebase/firestore";
 import { db } from "./firebase";
-import { type Task, type Vacation, type TeamMember, type RouteCity, type TagType } from "../types";
+import { type Task, type Vacation, type TeamMember, type RouteCity, type TagType, type Holiday } from "../types";
 
 // ── Default seed data ────────────────────────────────────────────────────────
 
@@ -19,7 +19,7 @@ export const DEFAULT_TASKS: Task[] = [
     id: "f3b3b2b1-1234-4bc1-9abc-123456789001",
     title: "Inspección de local comercial Av. Francia",
     routeId: "valencia",
-    assignedPair: "t_carlos-e_pablo",
+    assignedPair: ["t_carlos", "e_pablo"],
     priority: "HIGH",
     status: "IN_PROGRESS",
     dueDate: "2026-06-05T12:00:00",
@@ -34,7 +34,7 @@ export const DEFAULT_TASKS: Task[] = [
     id: "f3b3b2b1-1234-4bc1-9abc-123456789002",
     title: "Firma de Escrituras Madrid Norte",
     routeId: "madrid",
-    assignedPair: "t_sofia-e_laura",
+    assignedPair: ["t_sofia", "e_laura"],
     priority: "CRITICAL",
     status: "URGENT",
     dueDate: "2026-06-12T12:00:00",
@@ -48,7 +48,7 @@ export const DEFAULT_TASKS: Task[] = [
     id: "f3b3b2b1-1234-4bc1-9abc-123456789003",
     title: "Auditoría de Procesos de Formación",
     routeId: "barcelona",
-    assignedPair: "t_carlos-e_jaime",
+    assignedPair: ["t_carlos", "e_jaime"],
     priority: "MEDIUM",
     status: "PENDING",
     dueDate: "2026-06-20T12:00:00",
@@ -116,16 +116,30 @@ export const DEFAULT_VACATIONS: Vacation[] = [
   },
 ];
 
+export const DEFAULT_HOLIDAYS: Holiday[] = [
+  { id: "h1", date: "2026-01-01", name: "Año Nuevo" },
+  { id: "h2", date: "2026-05-01", name: "Día del Trabajo" },
+  { id: "h3", date: "2026-08-15", name: "Asunción de la Virgen" },
+  { id: "h4", date: "2026-10-12", name: "Fiesta Nacional de España" },
+  { id: "h5", date: "2026-11-01", name: "Todos los Santos" },
+  { id: "h6", date: "2026-12-06", name: "Día de la Constitución" },
+  { id: "h7", date: "2026-12-08", name: "Inmaculada Concepción" },
+  { id: "h8", date: "2026-12-25", name: "Navidad" },
+];
+
 // ── Vacation conflict check ──────────────────────────────────────────────────
 
 export function checkVacationConflict(
-  assignedPair: string,
+  assignedPair: string | string[],
   dueDateStr: string,
   currentVacations: Vacation[],
   currentTeam: TeamMember[]
 ): { hasConflict: boolean; message?: string } {
   if (!dueDateStr) return { hasConflict: false };
-  const parts = assignedPair.split("-").filter(Boolean);
+  // Support both old string format ("id1-id2") and new array format
+  const parts = Array.isArray(assignedPair)
+    ? assignedPair
+    : (assignedPair as string).split("-").filter(Boolean);
   if (!parts.length) return { hasConflict: false };
 
   const taskDate = new Date(dueDateStr);
@@ -195,6 +209,14 @@ export async function seedDefaultData(): Promise<void> {
     }
   }
 
+  const holidaysSnap = await getDocs(collection(db, "holidays"));
+  if (holidaysSnap.empty) {
+    needsSeed = true;
+    for (const h of DEFAULT_HOLIDAYS) {
+      batch.set(doc(db, "holidays", h.id), h);
+    }
+  }
+
   if (needsSeed) await batch.commit();
 }
 
@@ -206,6 +228,7 @@ export interface SubscriptionCallbacks {
   onTeamMembers: (members: TeamMember[]) => void;
   onRouteCities: (cities: RouteCity[]) => void;
   onTagsBank: (tags: TagType[]) => void;
+  onHolidays: (holidays: Holiday[]) => void;
 }
 
 export function subscribeToAll(callbacks: SubscriptionCallbacks): Unsubscribe {
@@ -236,18 +259,28 @@ export function subscribeToAll(callbacks: SubscriptionCallbacks): Unsubscribe {
       callbacks.onTagsBank(snap.docs.map(d => d.data() as TagType));
     })
   );
+  unsubs.push(
+    onSnapshot(query(collection(db, "holidays")), snap => {
+      callbacks.onHolidays(snap.docs.map(d => d.data() as Holiday));
+    })
+  );
 
   return () => unsubs.forEach(u => u());
+}
+
+// Helper to strip undefined values so Firestore doesn't reject document writes
+function clean<T>(obj: T): T {
+  return JSON.parse(JSON.stringify(obj));
 }
 
 // ── Tasks CRUD ───────────────────────────────────────────────────────────────
 
 export async function addTask(task: Task): Promise<void> {
-  await setDoc(doc(db, "tasks", task.id), task);
+  await setDoc(doc(db, "tasks", task.id), clean(task));
 }
 
 export async function updateTask(task: Task): Promise<void> {
-  await setDoc(doc(db, "tasks", task.id), task);
+  await setDoc(doc(db, "tasks", task.id), clean(task));
 }
 
 export async function deleteTask(id: string): Promise<void> {
@@ -257,11 +290,11 @@ export async function deleteTask(id: string): Promise<void> {
 // ── Vacations CRUD ───────────────────────────────────────────────────────────
 
 export async function addVacation(vacation: Vacation): Promise<void> {
-  await setDoc(doc(db, "vacations", vacation.id), vacation);
+  await setDoc(doc(db, "vacations", vacation.id), clean(vacation));
 }
 
 export async function updateVacation(vacation: Vacation): Promise<void> {
-  await setDoc(doc(db, "vacations", vacation.id), vacation);
+  await setDoc(doc(db, "vacations", vacation.id), clean(vacation));
 }
 
 export async function deleteVacation(id: string): Promise<void> {
@@ -271,7 +304,11 @@ export async function deleteVacation(id: string): Promise<void> {
 // ── Team Members CRUD ────────────────────────────────────────────────────────
 
 export async function addTeamMember(member: TeamMember): Promise<void> {
-  await setDoc(doc(db, "teamMembers", member.id), member);
+  await setDoc(doc(db, "teamMembers", member.id), clean(member));
+}
+
+export async function updateTeamMember(member: TeamMember): Promise<void> {
+  await setDoc(doc(db, "teamMembers", member.id), clean(member));
 }
 
 export async function deleteTeamMember(id: string): Promise<void> {
@@ -281,7 +318,7 @@ export async function deleteTeamMember(id: string): Promise<void> {
 // ── Route Cities CRUD ────────────────────────────────────────────────────────
 
 export async function addRouteCity(city: RouteCity): Promise<void> {
-  await setDoc(doc(db, "routeCities", city.id), city);
+  await setDoc(doc(db, "routeCities", city.id), clean(city));
 }
 
 export async function deleteRouteCity(id: string): Promise<void> {
@@ -291,9 +328,19 @@ export async function deleteRouteCity(id: string): Promise<void> {
 // ── Tags Bank CRUD ───────────────────────────────────────────────────────────
 
 export async function addTag(tag: TagType): Promise<void> {
-  await setDoc(doc(db, "tagsBank", tag.name), tag);
+  await setDoc(doc(db, "tagsBank", tag.name), clean(tag));
 }
 
 export async function deleteTag(name: string): Promise<void> {
   await deleteDoc(doc(db, "tagsBank", name));
+}
+
+// ── Holidays CRUD ────────────────────────────────────────────────────────────
+
+export async function addHoliday(holiday: Holiday): Promise<void> {
+  await setDoc(doc(db, "holidays", holiday.id), clean(holiday));
+}
+
+export async function deleteHoliday(id: string): Promise<void> {
+  await deleteDoc(doc(db, "holidays", id));
 }
